@@ -29,4 +29,6 @@ private:
   const ADMaterialProperty<Real> &_rho;
   const ADMaterialProperty<Real> &_cv;
   const VariableValue &_dirac_switch_react;
+  const MaterialProperty<RankTwoTensor> &_Fe;
+  const Real _thr_activation;
 };

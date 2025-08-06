@@ -11,6 +11,7 @@ ADPressureHSLUMP::validParams()
   params.addRequiredCoupledVar("Yfinal", "reacted mass fraction");
   params.addRequiredParam<Real>("beta_av", "beta_av");
   params.addRequiredCoupledVar("dirac_switch_react", "dirac_switch_react");
+  params.addRequiredParam<Real>("thr_activation", "thr_activation");
   return params;
 }
 
@@ -28,7 +29,9 @@ ADPressureHSLUMP::ADPressureHSLUMP(const InputParameters & parameters)
     _Ee_dot(getMaterialProperty<RankTwoTensor>("Ee_dot")),
     _rho(getADMaterialProperty<Real>("density")),
     _cv(getADMaterialProperty<Real>("specific_heat")),
-    _dirac_switch_react(coupledValue("dirac_switch_react"))
+    _dirac_switch_react(coupledValue("dirac_switch_react")),
+    _Fe(getMaterialProperty<RankTwoTensor>("Fe")),
+    _thr_activation(getParam<Real>("thr_activation"))
 {}
 
 ADReal
@@ -39,14 +42,15 @@ ADPressureHSLUMP::computeQpResidual()
   ///full pressure
 
   ADReal res_pressure;
-  res_pressure = - _u[_qp] * _dP_dT[_qp] * _Ee_dot[_qp].trace();
+  RankTwoTensor Ce = _Fe[_qp].transpose() * _Fe[_qp];
+  res_pressure = - std::max(_u[_qp] * _dP_dT[_qp] * (Ce.inverse().doubleContraction(_Ee_dot[_qp])), 0.);
 
   ADReal res_av;
   res_av = _beta_av * _pressure_av[_qp] * _Ee_dot[_qp].trace();
 
   ADReal res_tot = res_pressure + res_av;
 
-  if(_dirac_switch_react[_qp] > 1.){
+  if(_dirac_switch_react[_qp] > _thr_activation){
     res_tot *= 1.;
   }else{
     res_tot *= 0.;

@@ -10,6 +10,7 @@ ADVisHSLUMP::validParams()
   params.addRequiredParam<Real>("beta_p", "beta_p");
   params.addRequiredParam<Real>("use_PK2", "use_PK2");
   params.addRequiredCoupledVar("dirac_switch_react", "dirac_switch_react");
+  params.addRequiredParam<Real>("thr_activation", "thr_activation");
   return params;
 }
 
@@ -23,7 +24,8 @@ ADVisHSLUMP::ADVisHSLUMP(const InputParameters & parameters)
     _cv(getADMaterialProperty<Real>("specific_heat")),
     _F(getMaterialProperty<RankTwoTensor>("deformation_gradient")),
     _use_PK2(getParam<Real>("use_PK2")),
-    _dirac_switch_react(coupledValue("dirac_switch_react"))
+    _dirac_switch_react(coupledValue("dirac_switch_react")),
+    _thr_activation(getParam<Real>("thr_activation"))
 {}
 
 ADReal
@@ -40,13 +42,13 @@ ADVisHSLUMP::computeQpResidual()
     q_plastic = _cauchy_stress[_qp].doubleContraction(_Ep_dot[_qp]);
   }
 
-  ADReal res;
+  ADReal res = _beta_p * (1. / (_rho[_qp] * _cv[_qp])) * q_plastic;
 
-  if(_dirac_switch_react[_qp] > 1){
-    res = _beta_p * (1. / (_rho[_qp] * _cv[_qp])) * q_plastic * _test[_i][_qp];
+  if(_dirac_switch_react[_qp] > _thr_activation){
+    res = _beta_p * (1. / (_rho[_qp] * _cv[_qp])) * q_plastic;
   }else{
-    res = 0. * _test[_i][_qp];
+    res = 0.;
   }
 
-  return res;
+  return res * _test[_i][_qp];
 }

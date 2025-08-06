@@ -66,10 +66,10 @@ ADComputeYdotsRDXNS::computeQpProperties()
         _r1[_qp] = std::min(_Z1 * std::exp(- _E1 / (R_RDX * _T[_qp])), _rate_limit);
         _r2[_qp] = std::min(_Z2 * std::exp(- _E2 / (R_RDX * _T[_qp])), _rate_limit);
     }else{ //don't do anything before
-        _r1[_qp] = 0.0;
-        _r2[_qp] = 0.0;
+        _r1[_qp] = 0.;
+        _r2[_qp] = 0.;
     }
 
-    _Q1[_qp] = (_a1) + _b1 * std::max(0., _T[_qp] - _T_trans);
-    _Q2[_qp] = (_a2) + _b2 * std::max(0., _T[_qp] - _T_trans);  
+    _Q1[_qp] = (_a1) + (_b1 * std::max(0., _T[_qp] - _T_trans));
+    _Q2[_qp] = (_a2) + (_b2 * std::max(0., _T[_qp] - _T_trans));  
 }

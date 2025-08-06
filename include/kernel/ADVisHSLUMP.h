@@ -25,5 +25,6 @@ private:
   const ADMaterialProperty<Real> &_cv;
   const MaterialProperty<RankTwoTensor> &_F;
   const Real _use_PK2;
-  const VariableValue _dirac_switch_react;
+  const VariableValue &_dirac_switch_react;
+  const Real _thr_activation;
 };
