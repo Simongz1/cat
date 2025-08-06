@@ -25,5 +25,6 @@ private:
   const VariableValue & _Y3;
   const ADMaterialProperty<Real> &_rho;
   const ADMaterialProperty<Real> &_cv;
-  const VariableValue &_dirac_switch_react;
+  const VariableValue & _dirac_switch_react;
+  const Real _thr_activation;
 };

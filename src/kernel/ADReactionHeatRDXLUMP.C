@@ -11,6 +11,7 @@ ADReactionHeatRDXLUMP::validParams()
   params.addRequiredCoupledVar("Y2", "Y2");
   params.addRequiredCoupledVar("Y3", "Y3");
   params.addRequiredCoupledVar("dirac_switch_react","dirac_switch_react");
+  params.addRequiredParam<Real>("thr_activation", "thr_activation");
   return params;
 }
 
@@ -25,7 +26,8 @@ ADReactionHeatRDXLUMP::ADReactionHeatRDXLUMP(const InputParameters & parameters)
     _Y3(coupledValue("Y3")),
     _rho(getADMaterialProperty<Real>("density")),
     _cv(getADMaterialProperty<Real>("specific_heat")),
-    _dirac_switch_react(coupledValue("dirac_switch_react"))
+    _dirac_switch_react(coupledValue("dirac_switch_react")),
+    _thr_activation(getParam<Real>("thr_activation"))
 {}
 
 ADReal
@@ -37,13 +39,13 @@ ADReactionHeatRDXLUMP::computeQpResidual()
   q_dec_tot *= _rho[_qp];
 
   //control after chemistry heating is done
-
+ 
   ADReal res;
-  if (_dirac_switch_react[_qp] > 1){ //here the chemistry heating is done and the continuum model evolves
-    res = - (1. / (_rho[_qp] * _cv[_qp])) * q_dec_tot * _test[_i][_qp];
+  if (_dirac_switch_react[_qp] > _thr_activation){ //here the chemistry heating is done and the continuum model evolves
+    res = - (1. / (_rho[_qp] * _cv[_qp])) * q_dec_tot;
   }else{
-    res = 0. * _test[_i][_qp];
+    res = 0.;
   }
 
-  return res;
+  return res * _test[_i][_qp];
 }
