@@ -34,4 +34,16 @@ private:
     const VariableValue &_dirac_switch_react;
     const Real _switch_react;
     const Real _rate_limit;
+
+    //chemistry variables
+
+    const VariableValue &_Y1;
+    const VariableValue &_Y2;
+    const bool _use_lump;
+    const ADMaterialProperty<Real> &_rho;
+    const ADMaterialProperty<Real> &_cv;
+    ADMaterialProperty<Real> &_q_decomposition;
+    ADMaterialProperty<Real> &_Y1_dot;
+    ADMaterialProperty<Real> &_Y2_dot;
+    ADMaterialProperty<Real> &_Y3_dot;
 };

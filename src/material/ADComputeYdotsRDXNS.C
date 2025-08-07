@@ -25,6 +25,12 @@ ADComputeYdotsRDXNS::validParams()
     params.addRequiredCoupledVar("dirac_switch_react", "dirac");
     params.addRequiredParam<Real>("switch_react", "dirac switch value to turn on reaction");
     params.addRequiredParam<Real>("rate_limit", "rate_limit");
+
+    //parameters to compute decomposition heat rate
+
+    params.addRequiredCoupledVar("Y1", "Y1");
+    params.addRequiredCoupledVar("Y2", "Y2");
+    params.addRequiredParam<bool>("use_lump", "whether to compute lumped terms or not");
     return params;
 }
 
@@ -53,7 +59,18 @@ ADComputeYdotsRDXNS::ADComputeYdotsRDXNS(const InputParameters & parameters)
     _T_trans(getParam<Real>("T_trans")),
     _dirac_switch_react(coupledValue("dirac_switch_react")),
     _switch_react(getParam<Real>("switch_react")),
-    _rate_limit(getParam<Real>("rate_limit"))
+    _rate_limit(getParam<Real>("rate_limit")),
+    _Y1(coupledValue("Y1")),
+    _Y2(coupledValue("Y2")),
+
+    _use_lump(getParam<bool>("use_lump")),
+    _rho(getADMaterialProperty<Real>("density")),
+    _cv(getADMaterialProperty<Real>("specific_heat")),
+    //declarations for kernels
+    _q_decomposition(declareADProperty<Real>("q_decomposition")),
+    _Y1_dot(declareADProperty<Real>("Y1_dot")),
+    _Y2_dot(declareADProperty<Real>("Y2_dot")),
+    _Y3_dot(declareADProperty<Real>("Y3_dot"))
 {   
 }
 
@@ -72,4 +89,18 @@ ADComputeYdotsRDXNS::computeQpProperties()
 
     _Q1[_qp] = (_a1) + (_b1 * std::max(0., _T[_qp] - _T_trans));
     _Q2[_qp] = (_a2) + (_b2 * std::max(0., _T[_qp] - _T_trans));  
+
+    //compute heat from decomposition
+
+    _Y1_dot[_qp] = - _r1[_qp] * _Y1[_qp]; //rate of change Y1
+    _Y2_dot[_qp] = _r1[_qp] * _Y1[_qp] - _r2[_qp] * _Y2[_qp]; //rate of change Y2
+    _Y3_dot[_qp] = _r2[_qp] * _Y2[_qp]; //rate of change Y3
+
+    if(_use_lump){ //divide by rho*Cp so that MassLumped has consistent units
+        _Y1_dot[_qp] *= 1. / (_rho[_qp] * _cv[_qp]);
+        _Y2_dot[_qp] *= 1. / (_rho[_qp] * _cv[_qp]);
+        _Y3_dot[_qp] *= 1. / (_rho[_qp] * _cv[_qp]);
+    }
+    
+    _q_decomposition[_qp] = _rho[_qp] * (- _Q1[_qp] * _Y1_dot[_qp] + _Q2[_qp] * _Y3_dot[_qp]);
 }
