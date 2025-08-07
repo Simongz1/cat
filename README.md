@@ -1,4 +1,4 @@
-cat
+cat (chemistry and thermal transport app)
 =====
 
 Fork "cat" to create a new MOOSE-based application.
