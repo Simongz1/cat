@@ -8,7 +8,7 @@ InputParameters
 ADComputeMISTERnetHeat::validParams()
 {
   InputParameters params = Material::validParams();
-  params.addClassDescription("Misternet heat source material");
+  params.addClassDescription("Misternet heat source material, also computes artificial chemistry");
   params.addRequiredParam<Real>("T_ref", "reference temperature for thermal expansion");
   params.addRequiredCoupledVar("dirac_switch_shock","dirac delta function to control when the heat source is on/off");
   params.addRequiredCoupledVar("dirac_switch_react","dirac delta function to control when the heat source is on/off");
@@ -45,13 +45,21 @@ ADComputeMISTERnetHeat::ADComputeMISTERnetHeat(const InputParameters & parameter
     _vx(coupledValue("vx")),
     _ax(coupledValue("ax")),
     _thr_v(getParam<Real>("thr_v")),
-    _thr_a(getParam<Real>("thr_a"))
+    _thr_a(getParam<Real>("thr_a")),
+
+    //Test: formulate a surrogate chemistry evolution source
+    _Y1_dot_surrogate(declareADProperty<Real>("Y1_dot_surrogate")),
+    _Y2_dot_surrogate(declareADProperty<Real>("Y2_dot_surrogate")),
+    _Y3_dot_surrogate(declareADProperty<Real>("Y3_dot_surrogate")),
+    _indicator_surrogate(declareProperty<Real>("indicator_surrogate"))
 
 {}
 
 void
 ADComputeMISTERnetHeat::computeQpProperties()
 {
+  
+
   if(_v_flag[_qp] == 1. && _dirac_switch_shock[_qp] > 0. && _dirac_switch_shock[_qp] < 1.){
     _heatrate_mister_shock[_qp] = std::max((1. / _heat_time_shock) * _density[_qp] * _specific_heat[_qp] * (_temperature_mister_shock[_qp] - _T_ref), 0.);
   }
@@ -65,4 +73,35 @@ ADComputeMISTERnetHeat::computeQpProperties()
   else {
     _heatrate_mister_react[_qp] = 0.0;
   }
+
+  //compute the surrogate rates
+  //the surrogate rates depend only on tau_react
+  //we generate and assign the predicted values by temperature
+
+  Real Y1_pred;
+  Real Y2_pred;
+  Real Y3_pred;
+
+  if (_heatrate_mister_react[_qp] > 0.){ //this is the case where deflagration occurs locally
+    Y1_pred = 0.;
+    Y2_pred = 0.;
+    Y3_pred = 1.;
+  }else{ //case where q_react < q_shock, meaning quench
+    Y1_pred = 1.;
+    Y2_pred = 0.;
+    Y3_pred = 0.;
+  }
+
+  //construct rates
+  //we need to define an indicator to turn on and off the surrogate chemistry source
+
+  if(_v_flag[_qp] ==1. && _dirac_switch_react[_qp] > 0. && _dirac_switch_react[_qp] < 1.){ //chemical takeover stage at reacted regions
+    _indicator_surrogate[_qp] = 1.;
+  }else{
+    _indicator_surrogate[_qp] = 0.;
+  }
+
+  _Y1_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y1_pred / _heat_time_react;
+  _Y2_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y2_pred / _heat_time_react;
+  _Y3_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y3_pred / _heat_time_react;
 }

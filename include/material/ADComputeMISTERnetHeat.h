@@ -39,4 +39,11 @@ protected:
   const VariableValue &_ax;
   const Real _thr_v;
   const Real _thr_a;
+
+  //surrogate chemistry source
+
+  ADMaterialProperty<Real> &_Y1_dot_surrogate;
+  ADMaterialProperty<Real> &_Y2_dot_surrogate;
+  ADMaterialProperty<Real> &_Y3_dot_surrogate;
+  MaterialProperty<Real> &_indicator_surrogate;
 };
