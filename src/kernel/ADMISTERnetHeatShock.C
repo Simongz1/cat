@@ -1,5 +1,3 @@
-/// Calculates heat generated due to thermal expansion
-
 #include "ADMISTERnetHeatShock.h"
 
 registerMooseObject("TensorMechanicsApp", ADMISTERnetHeatShock);
