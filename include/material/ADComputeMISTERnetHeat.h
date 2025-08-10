@@ -46,4 +46,5 @@ protected:
   ADMaterialProperty<Real> &_Y2_dot_surrogate;
   ADMaterialProperty<Real> &_Y3_dot_surrogate;
   MaterialProperty<Real> &_indicator_surrogate;
+  const bool _direct_T;
 };
