@@ -23,6 +23,8 @@ ADComputeMISTERnetHeat::validParams()
   params.addRequiredParam<Real>("thr_v", "thr_v");
   params.addRequiredParam<Real>("thr_a", "thr_a");
   params.addRequiredParam<bool>("direct_T", "assign T predictions directly from a purely numerical source");
+  params.addRequiredParam<bool>("dynamic_tau", "use dyanamic reaction time");
+  params.addRequiredParam<bool>("temp_crit", "temp_crit");
   return params;
 }
 
@@ -53,7 +55,11 @@ ADComputeMISTERnetHeat::ADComputeMISTERnetHeat(const InputParameters & parameter
     _Y2_dot_surrogate(declareADProperty<Real>("Y2_dot_surrogate")),
     _Y3_dot_surrogate(declareADProperty<Real>("Y3_dot_surrogate")),
     _indicator_surrogate(declareProperty<Real>("indicator_surrogate")),
-    _direct_T(getParam<bool>("direct_T"))
+    _direct_T(getParam<bool>("direct_T")),
+    //for dynamic time update
+    _dynamic_tau(getParam<bool>("dynamic_tau")),
+    _time_react(getMaterialProperty<Real>("time_react")),
+    _temp_crit(getParam<bool>("temp_crit"))
 
 {}
 
@@ -61,6 +67,13 @@ void
 ADComputeMISTERnetHeat::computeQpProperties()
 {
   
+  Real total_tau;
+  if(_dynamic_tau){
+    total_tau = std::max(_time_react[_qp], 1e-3);
+  }else{
+    total_tau = _heat_time_react;
+  }
+
   if(_v_flag[_qp] == 1. && _dirac_switch_shock[_qp] > 0. && _dirac_switch_shock[_qp] < 1.){
     if(_direct_T){
       _heatrate_mister_shock[_qp] = _temperature_mister_shock[_qp] / _heat_time_shock;
@@ -76,7 +89,7 @@ ADComputeMISTERnetHeat::computeQpProperties()
     if(_direct_T){
       _heatrate_mister_react[_qp] = _temperature_mister_react[_qp] / _heat_time_react;
     }else{
-      _heatrate_mister_react[_qp] = std::max((1. / _heat_time_react) * _density[_qp] * _specific_heat[_qp] * (_temperature_mister_react[_qp] - _temperature_mister_shock[_qp]), 0.);
+      _heatrate_mister_react[_qp] = std::max((1. / total_tau) * _density[_qp] * _specific_heat[_qp] * (_temperature_mister_react[_qp] - _temperature_mister_shock[_qp]), 0.);
     }
   }
   else {
@@ -91,7 +104,14 @@ ADComputeMISTERnetHeat::computeQpProperties()
   Real Y2_pred;
   Real Y3_pred;
 
-  if (_temperature_mister_react[_qp] > 1500.){ //this is the case where deflagration occurs locally, assuming deflagrated regions occur when T > 1500K
+  bool condition;
+  if (_temp_crit){
+    condition = (_temperature_mister_react[_qp] > 1100. ? true : false);
+  }else{
+    condition = (_temperature_mister_react[_qp] > _temperature_mister_shock[_qp] ? true : false);
+  }
+
+  if (condition){ //this is the case where deflagration occurs locally, assuming deflagrated regions occur when T > 1500K
     Y1_pred = 0.;
     Y2_pred = 0.;
     Y3_pred = 1.;
@@ -112,7 +132,7 @@ ADComputeMISTERnetHeat::computeQpProperties()
 
   //from conservation of mass: Y1 + Y2 + Y3 = 1
 
-  _Y1_dot_surrogate[_qp] = - _indicator_surrogate[_qp] * Y3_pred / _heat_time_react;
-  _Y2_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y2_pred / _heat_time_react;
-  _Y3_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y3_pred / _heat_time_react;
+  _Y1_dot_surrogate[_qp] = - _indicator_surrogate[_qp] * Y3_pred / total_tau;
+  _Y2_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y2_pred / total_tau;
+  _Y3_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y3_pred / total_tau;
 }

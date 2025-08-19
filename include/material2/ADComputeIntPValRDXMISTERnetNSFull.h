@@ -80,6 +80,7 @@ protected:
 
   Real _stored_shock;
   Real _stored_react;
+  Real _stored_time;
 
   MaterialProperty<Real> &_called_up;
   const MaterialProperty<Real> &_called_up_old;
@@ -88,16 +89,28 @@ protected:
 
   const std::string _csv_shock;
   const std::string _csv_react;
+  const std::string _csv_times;
+
+  MaterialProperty<Real> &_time_react;
+  const MaterialProperty<Real> &_time_react_old;
 
   std::vector<std::vector<Real>> _csv_total_shock;
   std::vector<std::vector<Real>> _csv_total_react;
+  std::vector<std::vector<Real>> _csv_total_times;
   std::vector<Real> _up_values;
   std::vector<std::vector<Real>> _temperature_values_shock;
   std::vector<std::vector<Real>> _temperature_values_react;
+  std::vector<std::vector<Real>> _time_values;
+
+  //definitions for global interpolation
+
+  Real _interval;
+  Real _ratio;
 
   virtual void initQpStatefulProperties() override;
   virtual void computeQpProperties() override;
   virtual std::vector<Real> interpolation(const std::vector<Real> A, const std::vector<Real> B, const Real t);
   virtual std::vector<std::vector<Real>> readCSV(const std::string csv_name);
   virtual std::vector<Real> getTemperatures(const Real up, const int id);
+  virtual Real getTimes(const Real up, const int id);
 };

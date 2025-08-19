@@ -47,4 +47,7 @@ protected:
   ADMaterialProperty<Real> &_Y3_dot_surrogate;
   MaterialProperty<Real> &_indicator_surrogate;
   const bool _direct_T;
+  const bool _dynamic_tau;
+  const MaterialProperty<Real> &_time_react;
+  const bool _temp_crit;
 };
