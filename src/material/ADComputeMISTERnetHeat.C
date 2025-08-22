@@ -25,6 +25,8 @@ ADComputeMISTERnetHeat::validParams()
   params.addRequiredParam<bool>("direct_T", "assign T predictions directly from a purely numerical source");
   params.addRequiredParam<bool>("dynamic_tau", "use dyanamic reaction time");
   params.addRequiredParam<bool>("temp_crit", "temp_crit");
+  params.addRequiredParam<bool>("use_sin", "use_sin");
+  params.addRequiredParam<Real>("element_size", "element_size");
   return params;
 }
 
@@ -59,37 +61,52 @@ ADComputeMISTERnetHeat::ADComputeMISTERnetHeat(const InputParameters & parameter
     //for dynamic time update
     _dynamic_tau(getParam<bool>("dynamic_tau")),
     _time_react(getMaterialProperty<Real>("time_react")),
-    _temp_crit(getParam<bool>("temp_crit"))
+    _temp_crit(getParam<bool>("temp_crit")),
+    _use_sin(getParam<bool>("use_sin")),
+    _time_shock(declareProperty<Real>("time_shock")),
+    _h(getParam<Real>("element_size"))
 
 {}
 
 void
 ADComputeMISTERnetHeat::computeQpProperties()
 {
-  
+  Real cutoff;
   Real total_tau;
+  Real tau_shock;
   if(_dynamic_tau){
-    total_tau = std::max(_time_react[_qp], 1e-3);
+    total_tau = std::max(_time_react[_qp], 1e-6);
+    cutoff = total_tau;
+    tau_shock = _h / std::clamp(std::abs(_vx[_qp]), 0., 10.); //this computes the actual velocity it takes for the shock to cover an element
   }else{
     total_tau = _heat_time_react;
+    cutoff = 1.;
+    tau_shock = _heat_time_shock;
   }
+
+  _time_shock[_qp] = tau_shock;
 
   if(_v_flag[_qp] == 1. && _dirac_switch_shock[_qp] > 0. && _dirac_switch_shock[_qp] < 1.){
     if(_direct_T){
-      _heatrate_mister_shock[_qp] = _temperature_mister_shock[_qp] / _heat_time_shock;
+      _heatrate_mister_shock[_qp] = _density[_qp] * _specific_heat[_qp] * std::max(_temperature_mister_shock[_qp] - _T_ref, 0.) / _heat_time_shock;
     }else{
-      _heatrate_mister_shock[_qp] = std::max((1. / _heat_time_shock) * _density[_qp] * _specific_heat[_qp] * (_temperature_mister_shock[_qp] - _T_ref), 0.);
+      _heatrate_mister_shock[_qp] = std::max((1. / tau_shock) * _density[_qp] * _specific_heat[_qp] * (_temperature_mister_shock[_qp] - _T_ref), 0.);
     }
   }
   else {
     _heatrate_mister_shock[_qp] = 0.0;
   }
 
-  if(_v_flag[_qp] == 1. && _dirac_switch_react[_qp] > 0. && _dirac_switch_react[_qp] < 1.){
+  if(_v_flag[_qp] == 1. && _dirac_switch_react[_qp] > 0. && _dirac_switch_react[_qp] < cutoff){
     if(_direct_T){
-      _heatrate_mister_react[_qp] = _temperature_mister_react[_qp] / _heat_time_react;
+      _heatrate_mister_react[_qp] = _density[_qp] * _specific_heat[_qp] * std::max(_temperature_mister_react[_qp], 0.) / total_tau;
+      if(_use_sin){
+        _heatrate_mister_react[_qp] = _density[_qp] * _specific_heat[_qp] * getSinTarget(std::max(_temperature_mister_react[_qp] - _temperature_mister_shock[_qp], 0.), total_tau, std::clamp(total_tau * _dirac_switch_react[_qp], 0., 1.)); 
+        //_heatrate_mister_react[_qp] = _density[_qp] * _specific_heat[_qp] * std::max(_temperature_mister_react[_qp], 0.) / total_tau;
+        //_heatrate_mister_react[_qp] = _density[_qp] * _specific_heat[_qp] * std::max(_temperature_mister_react[_qp] - _temperature_mister_shock[_qp], 0.) * 
+      }
     }else{
-      _heatrate_mister_react[_qp] = std::max((1. / total_tau) * _density[_qp] * _specific_heat[_qp] * (_temperature_mister_react[_qp] - _temperature_mister_shock[_qp]), 0.);
+      _heatrate_mister_react[_qp] = std::max((1. / total_tau) * _density[_qp] * _specific_heat[_qp] * (_temperature_mister_react[_qp]), 0.);
     }
   }
   else {
@@ -111,7 +128,7 @@ ADComputeMISTERnetHeat::computeQpProperties()
     condition = (_temperature_mister_react[_qp] > _temperature_mister_shock[_qp] ? true : false);
   }
 
-  if (condition){ //this is the case where deflagration occurs locally, assuming deflagrated regions occur when T > 1500K
+  if (_temperature_mister_react[_qp] > 1100.){ //this is the case where deflagration occurs locally, assuming deflagrated regions occur when T > 1500K
     Y1_pred = 0.;
     Y2_pred = 0.;
     Y3_pred = 1.;
@@ -124,7 +141,7 @@ ADComputeMISTERnetHeat::computeQpProperties()
   //construct rates
   //we need to define an indicator to turn on and off the surrogate chemistry source
 
-  if(_v_flag[_qp] ==1. && _dirac_switch_react[_qp] > 0. && _dirac_switch_react[_qp] < 1.){ //chemical takeover stage at reacted regions
+  if(_v_flag[_qp] == 1. && _dirac_switch_react[_qp] > 0. && _dirac_switch_react[_qp] < cutoff){ //chemical takeover stage at reacted regions
     _indicator_surrogate[_qp] = 1.;
   }else{
     _indicator_surrogate[_qp] = 0.;
@@ -133,6 +150,19 @@ ADComputeMISTERnetHeat::computeQpProperties()
   //from conservation of mass: Y1 + Y2 + Y3 = 1
 
   _Y1_dot_surrogate[_qp] = - _indicator_surrogate[_qp] * Y3_pred / total_tau;
-  _Y2_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y2_pred / total_tau;
+  //_Y2_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y2_pred / total_tau;
   _Y3_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y3_pred / total_tau;
+
+  if(_use_sin){
+    _Y1_dot_surrogate[_qp] = - _indicator_surrogate[_qp] * Y3_pred / total_tau;
+    //_Y1_dot_surrogate[_qp] = - _indicator_surrogate[_qp] * getSinTarget(Y3_pred, total_tau, _dirac_switch_react[_qp]);
+    //_Y2_dot_surrogate[_qp] = _indicator_surrogate[_qp] * getSinTarget(Y2_pred, total_tau, _dirac_switch_react[_qp]);
+    //_Y3_dot_surrogate[_qp] = _indicator_surrogate[_qp] * getSinTarget(Y3_pred, total_tau, _dirac_switch_react[_qp]);
+    _Y3_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y3_pred / total_tau;
+  }
+}
+
+Real
+ADComputeMISTERnetHeat::getSinTarget(const Real target, const Real induction, const Real time_tracker){
+  return target * (M_PI / (2. * induction)) * std::sin(M_PI * time_tracker / induction);
 }

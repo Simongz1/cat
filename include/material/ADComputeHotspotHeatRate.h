@@ -25,9 +25,8 @@ private:
     ADMaterialProperty<Real> &_q_hotspot;
     const bool _use_lump;
     const bool _direct_T;
-    const bool _use_current;
-    const Real _k_proportional;
-    const VariableValue &_dirac_switch_react;
     const bool _use_sin;
-    const Real _pi;
+    const bool _use_shock;
+    const VariableValue &_v;
+    const Real _h;
 };

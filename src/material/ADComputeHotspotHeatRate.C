@@ -10,14 +10,13 @@ ADComputeHotspotHeatRate::validParams()
     params.addRequiredCoupledVar("temperature", "temperature variable");
     params.addRequiredCoupledVar("tau_hotspot", "induction time for hotspot initial rate");
     params.addRequiredCoupledVar("target", "target temperature distribution");
-    params.addRequiredCoupledVar("dirac_switch_react", "dirac_switch_react");
     params.addRequiredParam<bool>("use_lump", "whether to compute lumped terms or not");
     params.addRequiredParam<Real>("T_ref", "reference temperature");
     params.addRequiredParam<bool>("direct_T", "apply T directly or no");
-    params.addRequiredParam<bool>("use_current", "use current T difference");
-    params.addParam<Real>("k_proportional", "proportionality constant for temperature");
     params.addRequiredParam<bool>("use_sin", "ramp HS using a sin");
-    params.addRequiredParam<Real>("pi", "number pi");
+    params.addRequiredParam<bool>("use_shock", "whether to use shock loading or not");
+    params.addRequiredCoupledVar("velocity", "velocity");
+    params.addRequiredParam<Real>("element_size", "element_size");
     return params;
 }
 
@@ -33,11 +32,10 @@ ADComputeHotspotHeatRate::ADComputeHotspotHeatRate(const InputParameters & param
     _q_hotspot(declareADProperty<Real>("q_hotspot")),
     _use_lump(getParam<bool>("use_lump")),
     _direct_T(getParam<bool>("direct_T")),
-    _use_current(getParam<bool>("use_current")),
-    _k_proportional(getParam<Real>("k_proportional")),
-    _dirac_switch_react(coupledValue("dirac_switch_react")),
     _use_sin(getParam<bool>("use_sin")),
-    _pi(getParam<Real>("pi"))
+    _use_shock(getParam<bool>("use_shock")),
+    _v(coupledValue("velocity")),
+    _h(getParam<Real>("element_size"))
 {   
 }
 
@@ -54,17 +52,18 @@ ADComputeHotspotHeatRate::computeQpProperties()
         q *= off * (M_PI / (2. * _tau_hotspot[_qp])) * std::sin(M_PI * _t / _tau_hotspot[_qp]);
     }
     
+    if(_direct_T){
+        q *= 1. / _tau_hotspot[_qp];
+    }
+
     if(_use_lump){
         q *= lump_factor;
     }
 
-    if (_t > 0.05 && _t < 0.1) { // around 0.31 ns, first qp
-    mooseInfo("t=", _t,
-                " tau=", _tau_hotspot[_qp],
-                " target=", _target[_qp],
-                " T_ref=", _T_ref,
-                " dT=", _target[_qp] - _T_ref,
-                " q_spec(K/s)=", _q_hotspot[_qp]);
+    Real window_shock;
+    if(_use_shock){
+        window_shock = (std::abs(_v[_qp]) > 0.1 && _T[_qp] < _target[_qp] ? 1. : 0.);
+        q *= window_shock;
     }
 
     _q_hotspot[_qp] = q;
