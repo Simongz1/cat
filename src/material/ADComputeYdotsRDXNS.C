@@ -32,7 +32,6 @@ ADComputeYdotsRDXNS::validParams()
     params.addRequiredCoupledVar("Y2", "Y2");
     params.addRequiredParam<bool>("use_lump", "whether to compute lumped terms or not");
     params.addRequiredParam<bool>("dynamic_tau", "use dynamic tau");
-    params.addRequiredParam<Real>("thr_activation_rates", "thr_activation_rates");
     return params;
 }
 
@@ -74,8 +73,7 @@ ADComputeYdotsRDXNS::ADComputeYdotsRDXNS(const InputParameters & parameters)
     _Y2_dot(declareADProperty<Real>("Y2_dot")),
     _Y3_dot(declareADProperty<Real>("Y3_dot")),
     _dynamic_tau(getParam<bool>("dynamic_tau")),
-    _time_react(getMaterialProperty<Real>("time_react")),
-    _thr(getParam<Real>("thr_activation_rates"))
+    _time_react(getMaterialProperty<Real>("time_react"))
 {   
 }
 
@@ -85,24 +83,20 @@ ADComputeYdotsRDXNS::computeQpProperties()
     Real R_RDX = _Rg;
 
     bool condition_chemistry;
-    Real cutoff;
+
     if (_dynamic_tau){
         condition_chemistry = (_dirac_switch_react[_qp] > 1. ? true : false);
-        cutoff = _time_react[_qp];
     }else{
         condition_chemistry = (_dirac_switch_react[_qp] >= _switch_react ? true : false);
-        cutoff = 1.;
     }
 
-    //set to zero 
-    _r1[_qp] = 0.;
-    _r2[_qp] = 0.;
-
-    //add only after reaction is done
-    if(_dirac_switch_react[_qp] > cutoff){ //turn on after reaction heat has gone by
+    if(condition_chemistry){ //turn on after reaction heat has gone by
         //compute the rates of reaction of all reactions
         _r1[_qp] = std::min(_Z1 * std::exp(- _E1 / (R_RDX * _T[_qp])), _rate_limit);
         _r2[_qp] = std::min(_Z2 * std::exp(- _E2 / (R_RDX * _T[_qp])), _rate_limit);
+    }else{ //don't do anything before
+        _r1[_qp] = 0.;
+        _r2[_qp] = 0.;
     }
 
     _Q1[_qp] = (_a1) + (_b1 * std::max(0., _T[_qp] - _T_trans));

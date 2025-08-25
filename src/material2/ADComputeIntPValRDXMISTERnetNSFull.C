@@ -44,9 +44,6 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addRequiredParam<Real>("thr_a", "acceleration threshold");
   params.addRequiredParam<Real>("thr_v", "velocity threshold");
 
-  //test: use gradient to compute activation
-  
-
   params.addRequiredParam<Real>("up", "Piston velocity");
   params.addRequiredCoupledVar("density_i", "Coupled value");
   params.addRequiredParam<Real>("mask_size", "mask_size");
