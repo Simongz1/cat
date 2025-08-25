@@ -44,6 +44,9 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addRequiredParam<Real>("thr_a", "acceleration threshold");
   params.addRequiredParam<Real>("thr_v", "velocity threshold");
 
+  //test: use gradient to compute activation
+  
+
   params.addRequiredParam<Real>("up", "Piston velocity");
   params.addRequiredCoupledVar("density_i", "Coupled value");
   params.addRequiredParam<Real>("mask_size", "mask_size");
@@ -53,6 +56,9 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   //CSV
   params.addRequiredParam<std::string>("csv_shock", "csv_shock");
   params.addRequiredParam<std::string>("csv_react", "csv_react");
+  params.addRequiredParam<std::string>("csv_times", "csv_times");
+
+  params.addRequiredParam<bool>("use_fitted_eos", "use_fitted_eos");
   return params;
 }
 
@@ -127,11 +133,21 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _pressure_av(declareADProperty<Real>("pressure_av")),
 
     _csv_shock(getParam<std::string>("csv_shock")),
-    _csv_react(getParam<std::string>("csv_react"))
+    _csv_react(getParam<std::string>("csv_react")),
+    _csv_times(getParam<std::string>("csv_times")),
+
+    //declare time
+
+    _time_react(declareProperty<Real>("time_react")),
+    _time_react_old(getMaterialPropertyOld<Real>("time_react")),
+    _use_fitted_eos(getParam<bool>("use_fitted_eos"))
+  //here I cache the table only once
+
 {
   //here I cache the table only once
   _csv_total_shock = readCSV(_csv_shock);
   _csv_total_react = readCSV(_csv_react);
+  _csv_total_times = readCSV(_csv_times);
 
   for (auto &row : _csv_total_shock){
     if (row.size() < 2){
@@ -149,6 +165,16 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     std::vector<Real> temps(row.begin() + 1, row.end());
     _temperature_values_react.push_back(std::move(temps));
   }
+
+  //test: get times into usable array
+
+  for (auto &row : _csv_total_times){
+    if (row.size() < 2){
+      mooseError("need bigger CSV");
+    }
+    std::vector<Real> times(row.begin() + 1, row.end());
+    _time_values.push_back(std::move(times));
+  }
 }
 
 void 
@@ -157,6 +183,7 @@ ADComputeIntPValRDXMISTERnetNSFull::initQpStatefulProperties()
   _v_flag[_qp] = 0.0; //initialize flag
   _stored_shock = _temperature_mister_shock_old[_qp];
   _stored_react = _temperature_mister_react_old[_qp];
+  _stored_time  = _time_react_old[_qp];
   _called_up[_qp] = _called_up_old[_qp];
 
   ///////////////////////////
@@ -173,6 +200,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   _v_flag[_qp] = _v_flag_old[_qp];
   _temperature_mister_shock[_qp] = _temperature_mister_shock_old[_qp];
   _temperature_mister_react[_qp] = _temperature_mister_react_old[_qp];
+  _time_react[_qp] = _time_react_old[_qp];
   _called_up[_qp] = _called_up_old[_qp];
 
   //ORDER 2
@@ -185,14 +213,17 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
 
     Real pred_shock = getTemperatures(std::abs(_vx[_qp]), id_call)[0];
     Real pred_react = getTemperatures(std::abs(_vx[_qp]), id_call)[1];
+    Real pred_time  = getTimes(std::abs(_vx[_qp]), id_call);
 
     //store in material property
     _temperature_mister_shock[_qp] = pred_shock;
     _temperature_mister_react[_qp] = pred_react;
+    _time_react[_qp]               = pred_time;
 
     //get the temeprature at the initial qp
     _stored_shock = pred_shock;
     _stored_react = pred_react;
+    _stored_time  = pred_time;
 
     //store the called up value
     _called_up[_qp] = std::abs(_vx[_qp]);
@@ -204,6 +235,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
     _v_flag[_qp] = _v_flag[0];
     _temperature_mister_shock[_qp] = _temperature_mister_shock[0];
     _temperature_mister_react[_qp] = _temperature_mister_react[0];
+    _time_react[_qp]               = _time_react[0];
     _called_up[_qp] = _called_up[0];
   }
 
@@ -225,11 +257,21 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   
   P_mg = _Gamma * _rho[_qp] * _Cv[_qp] * (_T[_qp] - _T_ref) * (1.0 / Je); //initial thermal expansion term
   P_mg += K0 * eta * (1.0 - (_Gamma / 2.0) * (eta)) / std::pow((1.0 - _s * eta), 2.0);
+  
+  if(_use_fitted_eos){
+    P_mg = _A_u * std::exp(- _R1_u * Je) + _B_u * std::exp(- _R2_u * Je);
+    P_mg += _omega_u * _rho[_qp] * _Cv[_qp] * (_T[_qp] - _T_ref) / Je;
+  }
   _pressure_mg[_qp] = - P_mg; //store pressure 
 
   P_JWL = _A1 * (1.0 - _omega / (_R1 * Je)) * std::exp(- _R1 * Je); //mechanical term 1
   P_JWL += _A2 * (1.0 - _omega / (_R2 * Je)) * std::exp(- _R2 * Je); //mechanical term 2
   P_JWL += _omega * _rho[_qp] * _Cv[_qp] * (_T[_qp] - _T_ref) / Je; //thermal expansion term
+
+  if(_use_fitted_eos){
+    P_JWL = _A_r * std::exp(- _R1_r * Je) + _B_r * std::exp(- _R2_r * Je);
+    P_JWL += _omega_r * _rho[_qp] * _Cv[_qp] * (_T[_qp] - _T_ref) / Je;
+  }
   _pressure_JWL[_qp] = - P_JWL; //store
 
   //pressure interpolation
@@ -238,8 +280,16 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   _pressure_total[_qp] = - P_total;
 
   //define derivatives of pressure with respect to temperature
-  ADReal dPmg_dT = _Gamma * _rho[_qp] * _Cv[_qp] * (1. / Je);
-  ADReal dPJWL_dT = _omega * _rho[_qp] * _Cv[_qp] * (1. / Je);
+  ADReal dPmg_dT;
+  ADReal dPJWL_dT;
+
+  dPmg_dT = _Gamma * _rho[_qp] * _Cv[_qp] * (1. / Je);
+  dPJWL_dT = _omega * _rho[_qp] * _Cv[_qp] * (1. / Je);
+  
+  if (_use_fitted_eos){
+    dPmg_dT = _omega_u * _rho[_qp] * _Cv[_qp] * (1. / Je);
+    dPJWL_dT = _omega_r * _rho[_qp] * _Cv[_qp] * (1. / Je);
+  }
 
   _dP_dT[_qp] = ((1.0 - _Y_final[_qp]) * (dPmg_dT)) + (_Y_final[_qp] * dPJWL_dT);
 
@@ -315,6 +365,10 @@ ADComputeIntPValRDXMISTERnetNSFull::getTemperatures(const Real up, const int id)
       lower_bound = _up_values[i - 1];
       upper_bound = _up_values[i];
       interval_number = i - 1;
+
+      //test: save the interval number on the fly
+      _interval = interval_number;
+
       lower_temps_shock = _temperature_values_shock[i - 1];
       upper_temps_shock = _temperature_values_shock[i];
 
@@ -327,12 +381,36 @@ ADComputeIntPValRDXMISTERnetNSFull::getTemperatures(const Real up, const int id)
 
   Real t = (up - lower_bound) / (upper_bound - lower_bound);
 
+  //test: use this same t to interpolate time
+
+  _ratio = t;
+
   //interpolate temperatures based on t
 
   std::vector<Real> interpolated_temps_shock = interpolation(lower_temps_shock, upper_temps_shock, t); //this had an error
   std::vector<Real> interpolated_temps_react = interpolation(lower_temps_react, upper_temps_react, t);
   Real temp_shock = interpolated_temps_shock.at(id);
   Real temp_react = interpolated_temps_react.at(id);
+
+  //add the interpolation of the time to deflagration with the new data
   
   return {temp_shock, temp_react};
+}
+
+Real
+ADComputeIntPValRDXMISTERnetNSFull::getTimes(const Real up, const int id){
+
+  //create times lower and upper
+  std::vector<Real> lower_times;
+  std::vector<Real> upper_times;
+
+  //define lower and upper times
+
+  lower_times = _time_values[_interval];
+  upper_times = _time_values[_interval + 1];
+
+  //interpolate based on previously computed interval and balance number
+  std::vector<Real> interpolated_times = interpolation(lower_times, upper_times, _ratio); //this had an error
+  
+  return interpolated_times.at(id);
 }

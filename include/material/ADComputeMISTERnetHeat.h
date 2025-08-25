@@ -6,6 +6,7 @@
 #include "MathUtils.h"
 #include "RankTwoTensor.h"
 #include "RankFourTensor.h"
+#include <cmath>
 
 class ADComputeMISTERnetHeat : public Material
 {
@@ -47,4 +48,14 @@ protected:
   ADMaterialProperty<Real> &_Y3_dot_surrogate;
   MaterialProperty<Real> &_indicator_surrogate;
   const bool _direct_T;
+  const bool _dynamic_tau;
+  const MaterialProperty<Real> &_time_react;
+  const bool _temp_crit;
+  const bool _use_sin;
+  MaterialProperty<Real> &_time_shock;
+  const Real _h;
+
+  //helper function to get evolved sin target
+
+  virtual Real getSinTarget(const Real target, const Real induction, const Real time_tracker);
 };

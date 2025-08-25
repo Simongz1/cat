@@ -15,15 +15,18 @@ protected:
     virtual void computeQpProperties() override;
 
 private:
-
+    const VariableValue &_T;
     const ADMaterialProperty<Real> &_rho;
     const ADMaterialProperty<Real> &_cv;
-    const MaterialPropertyName _target_name;
-    const ADMaterialProperty<Real> &_target;
-    const MaterialPropertyName _tau_name;
-    const ADMaterialProperty<Real> &_tau;
-    const bool _use_PK2;
+    const VariableValue &_target;
+    const VariableValue &_tau_hotspot;
+    const Real _T_ref;
     //declaration
     ADMaterialProperty<Real> &_q_hotspot;
     const bool _use_lump;
+    const bool _direct_T;
+    const bool _use_sin;
+    const bool _use_shock;
+    const VariableValue &_v;
+    const Real _h;
 };
