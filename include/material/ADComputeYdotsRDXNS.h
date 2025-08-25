@@ -48,4 +48,5 @@ private:
     ADMaterialProperty<Real> &_Y3_dot;
     const bool _dynamic_tau;
     const MaterialProperty<Real> &_time_react;
+    const Real _thr;
 };
