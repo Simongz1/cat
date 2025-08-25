@@ -94,6 +94,8 @@ protected:
   MaterialProperty<Real> &_time_react;
   const MaterialProperty<Real> &_time_react_old;
 
+  const bool _use_fitted_eos;
+
   std::vector<std::vector<Real>> _csv_total_shock;
   std::vector<std::vector<Real>> _csv_total_react;
   std::vector<std::vector<Real>> _csv_total_times;

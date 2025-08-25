@@ -57,6 +57,8 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addRequiredParam<std::string>("csv_shock", "csv_shock");
   params.addRequiredParam<std::string>("csv_react", "csv_react");
   params.addRequiredParam<std::string>("csv_times", "csv_times");
+
+  params.addRequiredParam<bool>("use_fitted_eos", "use_fitted_eos");
   return params;
 }
 
@@ -137,7 +139,8 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     //declare time
 
     _time_react(declareProperty<Real>("time_react")),
-    _time_react_old(getMaterialPropertyOld<Real>("time_react"))
+    _time_react_old(getMaterialPropertyOld<Real>("time_react")),
+    _use_fitted_eos(getParam<bool>("use_fitted_eos"))
   //here I cache the table only once
 
 {
@@ -254,11 +257,21 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   
   P_mg = _Gamma * _rho[_qp] * _Cv[_qp] * (_T[_qp] - _T_ref) * (1.0 / Je); //initial thermal expansion term
   P_mg += K0 * eta * (1.0 - (_Gamma / 2.0) * (eta)) / std::pow((1.0 - _s * eta), 2.0);
+  
+  if(_use_fitted_eos){
+    P_mg = _A_u * std::exp(- _R1_u * Je) + _B_u * std::exp(- _R2_u * Je);
+    P_mg += _omega_u * _rho[_qp] * _Cv[_qp] * (_T[_qp] - _T_ref) / Je;
+  }
   _pressure_mg[_qp] = - P_mg; //store pressure 
 
   P_JWL = _A1 * (1.0 - _omega / (_R1 * Je)) * std::exp(- _R1 * Je); //mechanical term 1
   P_JWL += _A2 * (1.0 - _omega / (_R2 * Je)) * std::exp(- _R2 * Je); //mechanical term 2
   P_JWL += _omega * _rho[_qp] * _Cv[_qp] * (_T[_qp] - _T_ref) / Je; //thermal expansion term
+
+  if(_use_fitted_eos){
+    P_JWL = _A_r * std::exp(- _R1_r * Je) + _B_r * std::exp(- _R2_r * Je);
+    P_JWL += _omega_r * _rho[_qp] * _Cv[_qp] * (_T[_qp] - _T_ref) / Je;
+  }
   _pressure_JWL[_qp] = - P_JWL; //store
 
   //pressure interpolation
@@ -267,8 +280,16 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   _pressure_total[_qp] = - P_total;
 
   //define derivatives of pressure with respect to temperature
-  ADReal dPmg_dT = _Gamma * _rho[_qp] * _Cv[_qp] * (1. / Je);
-  ADReal dPJWL_dT = _omega * _rho[_qp] * _Cv[_qp] * (1. / Je);
+  ADReal dPmg_dT;
+  ADReal dPJWL_dT;
+
+  dPmg_dT = _Gamma * _rho[_qp] * _Cv[_qp] * (1. / Je);
+  dPJWL_dT = _omega * _rho[_qp] * _Cv[_qp] * (1. / Je);
+  
+  if (_use_fitted_eos){
+    dPmg_dT = _omega_u * _rho[_qp] * _Cv[_qp] * (1. / Je);
+    dPJWL_dT = _omega_r * _rho[_qp] * _Cv[_qp] * (1. / Je);
+  }
 
   _dP_dT[_qp] = ((1.0 - _Y_final[_qp]) * (dPmg_dT)) + (_Y_final[_qp] * dPJWL_dT);
 
