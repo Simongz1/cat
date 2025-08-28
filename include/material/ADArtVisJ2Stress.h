@@ -88,7 +88,7 @@ protected:
   MaterialProperty<Real> &_pnorm;
   MaterialProperty<Real> &_hsp;
   const MaterialProperty<RankTwoTensor> &_cauchy_stress;
-  const VariableValue &_Yfinal;
+  const ADVariableValue &_Yinitial;
 
 private:
   /// @{ Helper (dummy) variables for iteratively updating the consistant tangent during return mapping

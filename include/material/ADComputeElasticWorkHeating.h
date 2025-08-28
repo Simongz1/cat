@@ -15,7 +15,7 @@ protected:
     virtual void computeQpProperties() override;
 
 private:
-    const VariableValue &_T;
+    const ADVariableValue &_T;
     const Real _beta_av;
     const ADMaterialProperty<Real> &_pressure_av;
     const ADMaterialProperty<Real> &_dP_dT;

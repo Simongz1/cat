@@ -14,9 +14,9 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addRequiredParam<Real>("T_ref", "reference temperature for thermal expansion");
   params.addRequiredParam<Real>("C0", "artificial viscosity C0 parameter");
   params.addRequiredParam<Real>("C1", "artificial viscosity C1 parameter");
-  params.addRequiredCoupledVar("temperature", "temperature");
+  params.addCoupledVar("temperature", "temperature");
   params.addRequiredParam<Real>("element_size", "element_size");
-  params.addRequiredCoupledVar("Y_final", "final products mass fraction");
+  params.addCoupledVar("Y_final", "final products mass fraction");
   params.addRequiredParam<Real>("A_u", "JWL reacted EOS parameter A1");
   params.addRequiredParam<Real>("R1_u", "JWL reacted EOS parameter B1");
   params.addRequiredParam<Real>("B_u", "JWL reacted EOS parameter A2");
@@ -39,8 +39,12 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addRequiredParam<Real>("R2", "JWL reacted EOS parameter B2");
   params.addRequiredParam<Real>("omega", "JWL reacted EOS parameter omega");
   //velocity for calling mistnet
-  params.addRequiredCoupledVar("vx", "x component of velocity");
-  params.addRequiredCoupledVar("ax", "x component of acceleration");
+  params.addCoupledVar("vx", "x component of velocity");
+  params.addCoupledVar("ax", "x component of acceleration");
+
+  //test: using both components of v and a to define shock call
+  params.addCoupledVar("vy", "y component of velocity");
+  params.addCoupledVar("ay", "y component of acceleration");
   params.addRequiredParam<Real>("thr_a", "acceleration threshold");
   params.addRequiredParam<Real>("thr_v", "velocity threshold");
 
@@ -59,6 +63,10 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addRequiredParam<std::string>("csv_times", "csv_times");
 
   params.addRequiredParam<bool>("use_fitted_eos", "use_fitted_eos");
+  params.addRequiredParam<bool>("use_EOS_table", "use_EOS_table");
+  params.addRequiredParam<bool>("use_magnitude", "use_magnitude");
+  params.addRequiredParam<std::string>("csv_unreacted", "csv_unreacted");
+  params.addRequiredParam<std::string>("csv_reacted", "csv_reacted");
   return params;
 }
 
@@ -69,7 +77,7 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _T_ref(getParam<Real>("T_ref")),
     _rho(getADMaterialProperty<Real>("density")),
     _Cv(getADMaterialProperty<Real>("specific_heat")),
-    _T(coupledValue("temperature")),
+    _T(adCoupledValue("temperature")),
 
     _C0(getParam<Real>("C0")),
     _C1(getParam<Real>("C1")),
@@ -83,7 +91,7 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
 
     _dP_dT(declareADProperty<Real>("dP_dT")),
 
-    _Y_final(coupledValue("Y_final")),
+    _Y_final(adCoupledValue("Y_final")),
 
     _A_u(getParam<Real>("A_u")),
     _R1_u(getParam<Real>("R1_u")),
@@ -111,9 +119,10 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _R2(getParam<Real>("R2")),
     _omega(getParam<Real>("omega")),
 
-    _vx(coupledValue("vx")),
-    _vx_old(coupledValueOld("vx")),
-    _ax(coupledValue("ax")),
+    _vx(adCoupledValue("vx")),
+    _ax(adCoupledValue("ax")),
+    _vy(adCoupledValue("vy")),
+    _ay(adCoupledValue("ay")),
 
     _thr_a(getParam<Real>("thr_a")),
     _thr_v(getParam<Real>("thr_v")),
@@ -125,8 +134,6 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _temperature_mister_react(declareProperty<Real>("temperature_mister_react")),
     _temperature_mister_react_old(getMaterialPropertyOld<Real>("temperature_mister_react")),
     _density_i(coupledValue("density_i")),
-    _mask_size(getParam<Real>("mask_size")),
-    _use_mask(getParam<Real>("use_mask")),
     _called_up(declareProperty<Real>("called_up")),
     _called_up_old(getMaterialPropertyOld<Real>("called_up")),
     _us(declareADProperty<Real>("us")),
@@ -140,7 +147,11 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
 
     _time_react(declareProperty<Real>("time_react")),
     _time_react_old(getMaterialPropertyOld<Real>("time_react")),
-    _use_fitted_eos(getParam<bool>("use_fitted_eos"))
+    _use_fitted_eos(getParam<bool>("use_fitted_eos")),
+    _use_EOS_table(getParam<bool>("use_EOS_table")),
+    _use_magnitude(getParam<bool>("use_magnitude")),
+    _csv_unreacted(getParam<std::string>("csv_unreacted")),
+    _csv_reacted(getParam<std::string>("csv_reacted"))
   //here I cache the table only once
 
 {
@@ -148,6 +159,11 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
   _csv_total_shock = readCSV(_csv_shock);
   _csv_total_react = readCSV(_csv_react);
   _csv_total_times = readCSV(_csv_times);
+  _csv_total_pu = readCSV(_csv_unreacted);
+  _csv_total_pr = readCSV(_csv_reacted);
+
+  //test: get pressure from table
+
 
   for (auto &row : _csv_total_shock){
     if (row.size() < 2){
@@ -175,6 +191,35 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     std::vector<Real> times(row.begin() + 1, row.end());
     _time_values.push_back(std::move(times));
   }
+
+  //test: define the pressure and jacobian vectors outside of the function to avoid recomputation
+
+  //the csv structure is J, P_u, P_r
+  //this gets the pressures as a list on a vector
+  for (auto &row : _csv_total_pu){
+    if (row.size() < 2){
+      mooseError("need bigger CSV for pressures unreacted");
+    }
+    _Ju_values.push_back(row[0]);
+    _Pu_values.push_back(row[1]);
+  }
+
+  //invert the list
+  //std::reverse(_Ju_values.begin(), _Ju_values.end());
+  //std::reverse(_Pu_values.begin(), _Pu_values.end());
+
+  for (auto &row : _csv_total_pr){
+    if (row.size() < 2){
+      mooseError("need bigger CSV for pressures reacted");
+    }
+    _Jr_values.push_back(row[0]);
+    _Pr_values.push_back(row[1]);
+  }
+
+  //invert the list
+  //std::reverse(_Jr_values.begin(), _Jr_values.end());
+  //std::reverse(_Pr_values.begin(), _Pr_values.end());
+
 }
 
 void 
@@ -206,14 +251,35 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   //ORDER 2
   //activate shock heat: call when velocity is bigger than a value 1
 
-  if (_qp == 0. && _v_flag[_qp] == 0. && std::abs(_vx[_qp]) > _thr_v && std::abs(_ax[_qp]) < _thr_a){ //we need V and A constraints to make sure the call happens at the actual shock velocity
+  //test: compute magintudes of velocity and acceleration
+
+  Real vx_raw = MetaPhysicL::raw_value(_vx[_qp]);
+  Real vy_raw = MetaPhysicL::raw_value(_vy[_qp]);
+  Real ax_raw = MetaPhysicL::raw_value(_ax[_qp]);
+  Real ay_raw = MetaPhysicL::raw_value(_ay[_qp]);
+
+  Real v_mag = std::sqrt(std::pow(vx_raw, 2.) + std::pow(vy_raw, 2.));
+  Real a_mag = std::sqrt(std::pow(ax_raw, 2.) + std::pow(ay_raw, 2.));
+
+  Real condition_v;
+  Real condition_a;
+
+  if(_use_magnitude){
+    condition_v = v_mag;
+    condition_a = a_mag;
+  }else{
+    condition_v = std::abs(MetaPhysicL::raw_value(_vx[_qp]));
+    condition_a = std::abs(MetaPhysicL::raw_value(_ax[_qp]));
+  }
+
+  if (_qp == 0. && _v_flag[_qp] == 0. && condition_v > _thr_v && condition_a < _thr_a){ //we need V and A constraints to make sure the call happens at the actual shock velocity
     _v_flag[_qp] = 1.0; //set flag to one, call in misternet material as condition for ComputeQpProperties
     //get temperatures
     const int id_call = (_density_i[_qp]);
 
-    Real pred_shock = getTemperatures(std::abs(_vx[_qp]), id_call)[0];
-    Real pred_react = getTemperatures(std::abs(_vx[_qp]), id_call)[1];
-    Real pred_time  = getTimes(std::abs(_vx[_qp]), id_call);
+    Real pred_shock = getTemperatures(std::abs(MetaPhysicL::raw_value(_vx[_qp])), id_call)[0];
+    Real pred_react = getTemperatures(std::abs(MetaPhysicL::raw_value(_vx[_qp])), id_call)[1];
+    Real pred_time  = getTimes(std::abs(MetaPhysicL::raw_value(_vx[_qp])), id_call);
 
     //store in material property
     _temperature_mister_shock[_qp] = pred_shock;
@@ -226,7 +292,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
     _stored_time  = pred_time;
 
     //store the called up value
-    _called_up[_qp] = std::abs(_vx[_qp]);
+    _called_up[_qp] = std::abs(MetaPhysicL::raw_value(_vx[_qp]));
   }
 
   //ORDER 3
@@ -291,7 +357,18 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
     dPJWL_dT = _omega_r * _rho[_qp] * _Cv[_qp] * (1. / Je);
   }
 
-  _dP_dT[_qp] = ((1.0 - _Y_final[_qp]) * (dPmg_dT)) + (_Y_final[_qp] * dPJWL_dT);
+  //test: use table
+
+  if(_use_EOS_table){ 
+    Real Jac = Je; //elastic volume change, should accont for thermal expansion too
+    std::vector<Real> pressures = getPressures(Je);
+    _pressure_mg[_qp] = - pressures[0];
+    _pressure_JWL[_qp] = - pressures[1];
+    _pressure_total[_qp] = - ((1. - _Y_final[_qp]) * pressures[0] + _Y_final[_qp] * pressures[1]);
+  }
+
+  //test: use AD to get the derivative of pressure WRT temperature, then write into an ADMaterialProperty
+  _dP_dT[_qp] = (1. - _Y_final[_qp]) * dPmg_dT + _Y_final[_qp] * dPJWL_dT;
 
   //include artificial viscosity
   ADReal P_av;
@@ -305,7 +382,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   //compute and declare the derivatives of each partial pressure wrt temperature to consume on PressureHS
 
   //compute shock velocity
-  _us[_qp] = ss + (_s * std::abs(_vx[_qp]));
+  _us[_qp] = ss + (_s * std::abs(MetaPhysicL::raw_value(_vx[_qp])));
 }
 
 //interpolate between values
@@ -413,4 +490,87 @@ ADComputeIntPValRDXMISTERnetNSFull::getTimes(const Real up, const int id){
   std::vector<Real> interpolated_times = interpolation(lower_times, upper_times, _ratio); //this had an error
   
   return interpolated_times.at(id);
+}
+
+//std::vector<Real>
+//ADComputeIntPValRDXMISTERnetNSFull::getPressures(const Real Jac){
+//  //this gets the unreacted pressure for a given J = det(F) from the csv table
+//  Real P;
+//  Real Pu;
+//  Real Pr;
+//  Real lower_Ju;
+//  Real upper_Ju;
+//  Real lower_Jr;
+//  Real upper_Jr;
+//  Real lower_Pu;
+//  Real upper_Pu;
+//  Real lower_Pr;
+//  Real upper_Pr;
+//
+//  //run thorugh J values to get the interval where the actual J is
+//  Real loc_u;
+//  Real clamped_Ju = std::clamp(Jac, _Ju_values[0], _Ju_values.back());
+//  for (unsigned int i = 1; i < _Ju_values.size(); ++i){
+//    if(_Ju_values[i] > clamped_Ju){
+//      lower_Ju = _Ju_values[i - 1];
+//      upper_Ju = _Ju_values[i];
+//      loc_u = i;
+//      break;
+//    }
+//  }
+//  Real tu = (clamped_Ju - lower_Ju) / (upper_Ju - lower_Ju);
+//
+//  Real loc_r;
+//  Real clamped_Jr = std::clamp(Jac, _Jr_values[0], _Jr_values.back());
+//  for (unsigned int i = 1; i < _Jr_values.size(); ++i){
+//    if(_Jr_values[i] > clamped_Jr){ //make sure we don't go out of bounds, specially since data for reacted is limited
+//      lower_Jr = _Jr_values[i - 1];
+//      upper_Jr = _Jr_values[i];
+//      loc_r = i;
+//      break;
+//    }
+//  }
+//  Real tr = (clamped_Jr - lower_Jr) / (upper_Jr - lower_Jr);
+//  
+//  //use this interval to intepolate the pressures
+//  lower_Pu = _Pu_values[loc_u - 1];
+//  upper_Pu = _Pu_values[loc_u];
+//  lower_Pr = _Pr_values[loc_r - 1];
+//  upper_Pr = _Pr_values[loc_r];
+//
+//  Pu = (1. - tu) * lower_Pu + tu * upper_Pu;
+//  Pr = (1. - tr) * lower_Pr + tr * upper_Pr;
+//  return {Pu, Pr};
+//}
+
+std::vector<Real>
+ADComputeIntPValRDXMISTERnetNSFull::getPressures(const Real J)
+{
+  auto interp_no_extrap = [](Real x,
+                             const std::vector<Real> & X,
+                             const std::vector<Real> & Y) -> Real
+  {
+    auto it = std::lower_bound(X.begin(), X.end(), x);
+
+    if (it == X.begin())
+      return Y.front();
+    if (it == X.end())
+      return Y.back();
+
+    const size_t i = static_cast<size_t>(std::distance(X.begin(), it));
+    const Real x0 = X[i - 1], x1 = X[i];
+    const Real y0 = Y[i - 1], y1 = Y[i];
+
+    const Real dx = x1 - x0;
+    if (dx == 0.0)
+      return y1;
+
+    const Real t = (x - x0) / dx;
+    
+    return (1.0 - t) * y0 + t * y1;
+  };
+
+  const Real Pu = interp_no_extrap(J, _Ju_values, _Pu_values);
+  const Real Pr = interp_no_extrap(J, _Jr_values, _Pr_values);
+  return {Pu, Pr};
 }

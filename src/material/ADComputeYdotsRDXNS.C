@@ -3,12 +3,14 @@
 
 registerMooseObject("catApp", ADComputeYdotsRDXNS);
 
+//test: currently changing T to retrieve ADVariableValue
+
 InputParameters
 ADComputeYdotsRDXNS::validParams()
 {
     InputParameters params = Material::validParams();
     params.addClassDescription("compute the rate of reaction of each species for a 3 phase - 2 stage reaction model");
-    params.addRequiredCoupledVar("temperature", "temperature");
+    params.addCoupledVar("temperature", "temperature");
 
     params.addRequiredParam<Real>("Z1", "pre-exponential factor Z1");
     params.addRequiredParam<Real>("Z2", "pre-exponential factor Z2");
@@ -28,8 +30,8 @@ ADComputeYdotsRDXNS::validParams()
 
     //parameters to compute decomposition heat rate
 
-    params.addRequiredCoupledVar("Y1", "Y1");
-    params.addRequiredCoupledVar("Y2", "Y2");
+    params.addCoupledVar("Y1", "Y1");
+    params.addCoupledVar("Y2", "Y2");
     params.addRequiredParam<bool>("use_lump", "whether to compute lumped terms or not");
     params.addRequiredParam<bool>("dynamic_tau", "use dynamic tau");
     params.addRequiredParam<Real>("thr_activation_rates", "thr_activation_rates");
@@ -38,7 +40,7 @@ ADComputeYdotsRDXNS::validParams()
 
 ADComputeYdotsRDXNS::ADComputeYdotsRDXNS(const InputParameters & parameters)
   : Material(parameters),
-    _T(coupledValue("temperature")),
+    _T(adCoupledValue("temperature")),
 
     //reaction rate parameters
     _Z1(getParam<Real>("Z1")),
@@ -61,9 +63,8 @@ ADComputeYdotsRDXNS::ADComputeYdotsRDXNS(const InputParameters & parameters)
     _T_trans(getParam<Real>("T_trans")),
     _dirac_switch_react(coupledValue("dirac_switch_react")),
     _switch_react(getParam<Real>("switch_react")),
-    _rate_limit(getParam<Real>("rate_limit")),
-    _Y1(coupledValue("Y1")),
-    _Y2(coupledValue("Y2")),
+    _Y1(adCoupledValue("Y1")),
+    _Y2(adCoupledValue("Y2")),
 
     _use_lump(getParam<bool>("use_lump")),
     _rho(getADMaterialProperty<Real>("density")),
@@ -98,15 +99,15 @@ ADComputeYdotsRDXNS::computeQpProperties()
     _r1[_qp] = 0.;
     _r2[_qp] = 0.;
 
-    //add only after reaction is done
+    //add only after takeover is done
     if(_dirac_switch_react[_qp] > cutoff){ //turn on after reaction heat has gone by
         //compute the rates of reaction of all reactions
-        _r1[_qp] = std::min(_Z1 * std::exp(- _E1 / (R_RDX * _T[_qp])), _rate_limit);
-        _r2[_qp] = std::min(_Z2 * std::exp(- _E2 / (R_RDX * _T[_qp])), _rate_limit);
+        _r1[_qp] = _Z1 * std::exp(- _E1 / (R_RDX * _T[_qp]));
+        _r2[_qp] = _Z2 * std::exp(- _E2 / (R_RDX * _T[_qp]));
     }
 
     _Q1[_qp] = (_a1) + (_b1 * std::max(0., _T[_qp] - _T_trans));
-    _Q2[_qp] = (_a2) + (_b2 * std::max(0., _T[_qp] - _T_trans));  
+    _Q2[_qp] = (_a2) + (_b2 * std::max(0., _T[_qp] - _T_trans));
 
     //compute heat from decomposition
 

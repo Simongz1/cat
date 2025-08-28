@@ -15,7 +15,7 @@ protected:
     virtual void computeQpProperties() override;
 
 private:
-    const VariableValue & _T;
+    const ADVariableValue & _T;
 
     const Real _Z1;
     const Real _Z2;
@@ -33,12 +33,11 @@ private:
     const Real _T_trans;
     const VariableValue &_dirac_switch_react;
     const Real _switch_react;
-    const Real _rate_limit;
 
     //chemistry variables
 
-    const VariableValue &_Y1;
-    const VariableValue &_Y2;
+    const ADVariableValue &_Y1;
+    const ADVariableValue &_Y2;
     const bool _use_lump;
     const ADMaterialProperty<Real> &_rho;
     const ADMaterialProperty<Real> &_cv;

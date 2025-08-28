@@ -21,7 +21,7 @@ protected:
   const Real _T_ref;
   const ADMaterialProperty<Real> &_rho;
   const ADMaterialProperty<Real> &_Cv;
-  const VariableValue &_T;
+  const ADVariableValue &_T;
 
   const Real _C0;
   const Real _C1;
@@ -34,7 +34,7 @@ protected:
   ADMaterialProperty<Real> &_pressure_total;
   ADMaterialProperty<Real> &_dP_dT;
 
-  const VariableValue &_Y_final;
+  const ADVariableValue &_Y_final;
   const Real _A_u;
   const Real _R1_u;
   const Real _B_u;
@@ -59,9 +59,10 @@ protected:
   const Real _R2;
   const Real _omega;
   
-  const VariableValue &_vx;
-  const VariableValue &_vx_old;
-  const VariableValue &_ax;
+  const ADVariableValue &_vx;
+  const ADVariableValue &_ax;
+  const ADVariableValue &_vy;
+  const ADVariableValue &_ay;
 
   const Real _thr_a;
   const Real _thr_v;
@@ -75,8 +76,6 @@ protected:
   const MaterialProperty<Real> &_temperature_mister_react_old;
 
   const VariableValue & _density_i;
-  const Real _mask_size;
-  const Real _use_mask;
 
   Real _stored_shock;
   Real _stored_react;
@@ -95,10 +94,17 @@ protected:
   const MaterialProperty<Real> &_time_react_old;
 
   const bool _use_fitted_eos;
+  const bool _use_EOS_table;
+  const bool _use_magnitude;
+
+  const std::string _csv_unreacted;
+  const std::string _csv_reacted;
 
   std::vector<std::vector<Real>> _csv_total_shock;
   std::vector<std::vector<Real>> _csv_total_react;
   std::vector<std::vector<Real>> _csv_total_times;
+  std::vector<std::vector<Real>> _csv_total_pu;
+  std::vector<std::vector<Real>> _csv_total_pr;
   std::vector<Real> _up_values;
   std::vector<std::vector<Real>> _temperature_values_shock;
   std::vector<std::vector<Real>> _temperature_values_react;
@@ -109,10 +115,18 @@ protected:
   Real _interval;
   Real _ratio;
 
+  //add here vectors to get the pressure and jacobian from the table
+
+  std::vector<Real> _Ju_values;
+  std::vector<Real> _Jr_values;
+  std::vector<Real> _Pu_values;
+  std::vector<Real> _Pr_values;
+
   virtual void initQpStatefulProperties() override;
   virtual void computeQpProperties() override;
   virtual std::vector<Real> interpolation(const std::vector<Real> A, const std::vector<Real> B, const Real t);
   virtual std::vector<std::vector<Real>> readCSV(const std::string csv_name);
   virtual std::vector<Real> getTemperatures(const Real up, const int id);
   virtual Real getTimes(const Real up, const int id);
+  virtual std::vector<Real> getPressures(const Real Jac);
 };

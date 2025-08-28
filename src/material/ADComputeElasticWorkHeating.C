@@ -2,12 +2,14 @@
 
 registerMooseObject("catApp", ADComputeElasticWorkHeating);
 
+//test: currently changing T to retrieve ADVariableValue
+
 InputParameters
 ADComputeElasticWorkHeating::validParams()
 {
     InputParameters params = Material::validParams();
     params.addClassDescription("compute the elastic compression work term to be called by a heat source kernel");
-    params.addRequiredCoupledVar("temperature", "temperature");
+    params.addCoupledVar("temperature", "temperature");
     params.addRequiredParam<Real>("beta_av", "beta_av");
     params.addRequiredCoupledVar("dirac_switch_react", "dirac_switch_react");
     params.addRequiredParam<Real>("thr_activation", "thr_activation");
@@ -18,7 +20,7 @@ ADComputeElasticWorkHeating::validParams()
 
 ADComputeElasticWorkHeating::ADComputeElasticWorkHeating(const InputParameters & parameters)
   : Material(parameters),
-    _T(coupledValue("temperature")),
+    _T(adCoupledValue("temperature")),
     _beta_av(getParam<Real>("beta_av")),
     _pressure_av(getADMaterialProperty<Real>("pressure_av")),
     _dP_dT(getADMaterialProperty<Real>("dP_dT")),

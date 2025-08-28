@@ -1,15 +1,8 @@
-//* This file is part of the MOOSE framework
-//* https://www.mooseframework.org
-//*
-//* All rights reserved, see COPYRIGHT for full restrictions
-//* https://github.com/idaholab/moose/blob/master/COPYRIGHT
-//*
-//* Licensed under LGPL 2.1, please see LICENSE for details
-//* https://www.gnu.org/licenses/lgpl-2.1.html
-
 #include "ADArtVisJ2Stress.h"
 
 registerMooseObject("catApp", ADArtVisJ2Stress);
+
+//test: currently changing Yfinal to retrieve ADVariableValue
 
 InputParameters
 ADArtVisJ2Stress::validParams()
@@ -26,7 +19,7 @@ ADArtVisJ2Stress::validParams()
   params.addRequiredParam<Real>("C1", "artificial viscosity C1 parameter");
   params.addRequiredParam<Real>("element_size", "element_size");
   params.addRequiredParam<Real>("bulk", "bulk");
-  params.addRequiredCoupledVar("Yfinal", "Yfinal");
+  params.addCoupledVar("Yinitial", "Yinitial");
   return params;
 }
 
@@ -82,7 +75,7 @@ ADArtVisJ2Stress::ADArtVisJ2Stress(
     _pnorm(declareProperty<Real>("pnorm")),
     _hsp(declareProperty<Real>("hsp")),
     _cauchy_stress(getMaterialProperty<RankTwoTensor>("cauchy_stress")),
-    _Yfinal(coupledValue("Yfinal"))
+    _Yinitial(adCoupledValue("Yinitial"))
 {
 }
 
@@ -182,7 +175,7 @@ ADArtVisJ2Stress::computeQpPK1Stress()
   _Ep_dot[_qp] = (1. / 2.) * ((Fp_dot.transpose() * _Fp[_qp]) + _Fp[_qp].transpose() * Fp_dot);
 
   //compute shear and kirchhoff stresses
-  s = (1. - _Yfinal[_qp]) * G * _be[_qp].deviatoric();
+  s = _Yinitial[_qp].value() * G * _be[_qp].deviatoric(); //changed to Yinitial. Only unreacted phase can affort shear stress
   RankTwoTensor tau = _pressure_total[_qp].value() * I + s;
   _pk1_stress[_qp] = tau * Fit;
 
