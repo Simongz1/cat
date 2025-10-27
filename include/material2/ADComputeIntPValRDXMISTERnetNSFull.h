@@ -1,0 +1,154 @@
+
+#pragma once
+
+#include "Material.h"
+#include "RankFourTensor.h"
+#include "RankTwoTensor.h"
+#include "MathUtils.h"
+#include "RankFourTensor.h"
+#include <vector>
+#include "ElasticityTensorTools.h"
+
+class ADComputeIntPValRDXMISTERnetNSFull : public Material
+{
+public:
+  static InputParameters validParams();
+
+  ADComputeIntPValRDXMISTERnetNSFull(const InputParameters & parameters);
+
+//  void initialSetup() override;
+
+protected:
+  const Real _T_ref;
+  const ADMaterialProperty<Real> &_rho;
+  const ADMaterialProperty<Real> &_Cv;
+  const ADVariableValue &_T;
+
+  const Real _C0;
+  const Real _C1;
+
+  //variable element length computation
+  const MaterialProperty<RankFourTensor> &_elasticity_tensor;
+  const Real _Le;
+  ADMaterialProperty<Real> &_pressure_mg;
+  ADMaterialProperty<Real> &_pressure_JWL;
+  ADMaterialProperty<Real> &_pressure_total;
+  ADMaterialProperty<Real> &_dP_dT;
+
+  const ADVariableValue &_Y_final;
+  const Real _A_u;
+  const Real _R1_u;
+  const Real _B_u;
+  const Real _R2_u;
+  const Real _omega_u;
+  const Real _A_r;
+  const Real _R1_r;
+  const Real _B_r;
+  const Real _R2_r;
+  const Real _omega_r;
+
+  const MaterialProperty<RankTwoTensor> &_F;
+  const MaterialProperty<RankTwoTensor> &_F_old;
+
+  const Real _P0;
+  const Real _use_RDX;
+  const Real _Gamma;
+  const Real _s;
+  const Real _A1;
+  const Real _R1;
+  const Real _A2;
+  const Real _R2;
+  const Real _omega;
+  
+  const ADVariableValue &_vx;
+  const ADVariableValue &_ax;
+  const ADVariableValue &_vy;
+  const ADVariableValue &_ay;
+
+  //test:vector variable
+  const VectorVariableValue &_v_vect;
+  const VectorVariableValue &_a_vect;
+
+  const Real _thr_a;
+  const Real _thr_v;
+  MaterialProperty<Real> &_v_flag;
+  const MaterialProperty<Real> &_v_flag_old;
+
+  const Real _up;
+  MaterialProperty<Real> & _temperature_mister_shock;
+  const MaterialProperty<Real> &_temperature_mister_shock_old;
+  MaterialProperty<Real> & _temperature_mister_react;
+  const MaterialProperty<Real> &_temperature_mister_react_old;
+
+  const VariableValue & _density_i;
+
+  Real _stored_shock;
+  Real _stored_react;
+  Real _stored_time;
+  Real _stored_density;
+
+  MaterialProperty<Real> &_called_up;
+  const MaterialProperty<Real> &_called_up_old;
+  ADMaterialProperty<Real> &_us;
+  ADMaterialProperty<Real> &_pressure_av;
+  const MaterialProperty<Real> &_pressure_av_old;
+
+  bool _call_condition;
+
+  // csv
+  const std::string _csv_shock;
+  const std::string _csv_react;
+  const std::string _csv_times;
+  const std::string _csv_density;
+
+  MaterialProperty<Real> &_time_react;
+  const MaterialProperty<Real> &_time_react_old;
+
+  const bool _use_fitted_eos;
+  const bool _use_EOS_table;
+  const bool _use_magnitude;
+
+  const std::string _csv_unreacted;
+  const std::string _csv_reacted;
+  ADMaterialProperty<Real> &_density;
+  //const MaterialProperty<Real> &_density_old;
+  //const Real _scaling_density;
+  const VariableValue &_density_csv;
+  const bool _use_av_tracking;
+
+  /////////////////////////////////
+
+  std::vector<std::vector<Real>> _csv_total_shock;
+  std::vector<std::vector<Real>> _csv_total_react;
+  std::vector<std::vector<Real>> _csv_total_times;
+  std::vector<std::vector<Real>> _csv_total_density;
+  //
+  std::vector<std::vector<Real>> _csv_total_pu;
+  std::vector<std::vector<Real>> _csv_total_pr;
+  std::vector<Real> _up_values;
+  std::vector<std::vector<Real>> _temperature_values_shock;
+  std::vector<std::vector<Real>> _temperature_values_react;
+  std::vector<std::vector<Real>> _time_values;
+  std::vector<std::vector<Real>> _density_values;
+
+  //definitions for global interpolation
+
+  Real _interval;
+  Real _ratio;
+
+  //add here vectors to get the pressure and jacobian from the table
+
+  std::vector<Real> _Ju_values;
+  std::vector<Real> _Jr_values;
+  std::vector<Real> _Pu_values;
+  std::vector<Real> _Pr_values;
+
+  virtual void initQpStatefulProperties() override;
+  virtual void computeQpProperties() override;
+  virtual std::vector<Real> interpolation(const std::vector<Real> A, const std::vector<Real> B, const Real t);
+  virtual std::vector<std::vector<Real>> readCSV(const std::string csv_name);
+  virtual std::vector<Real> getTemperatures(const Real up, const int id);
+  virtual Real getTimes(const Real up, const int id);
+  virtual Real getDensity(const Real up, const int id);
+  virtual std::vector<Real> getPressures(const Real Jac);
+};
