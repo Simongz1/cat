@@ -152,6 +152,9 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _pressure_av(declareADProperty<Real>("pressure_av")),
     _pressure_av_old(getMaterialPropertyOld<Real>("pressure_av")),
 
+    //get older
+    _pressure_av_older(getMaterialPropertyOlder<Real>("pressure_av")),
+
     _csv_shock(getParam<std::string>("csv_shock")),
     _csv_react(getParam<std::string>("csv_react")),
     _csv_times(getParam<std::string>("csv_times")),
@@ -319,11 +322,13 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   bool _call_condition = false;
 
   if (_use_av_tracking){
-    Real av_old = _pressure_av_old[_qp];
-    Real av_current = MetaPhysicL::raw_value(P_av);
-    Real av_diff = (av_current - av_old) / _dt;
+    const Real av_old = std::max(_pressure_av_old[_qp], 0.);
+    const Real av_older = std::max(_pressure_av_older[_qp], 0.);
+
+    //previous timestep derivative
+    const Real av_diff = (av_old - av_older) / _dt;
     
-    if (av_old < 0. && std::abs(av_current) < 1e-1 && av_diff > 0.){
+    if (av_older < 0. && std::abs(av_old) < 1e-1 && av_diff > 0.){
       _call_condition = true;
     }
   }

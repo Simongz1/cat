@@ -92,6 +92,7 @@ protected:
   ADMaterialProperty<Real> &_us;
   ADMaterialProperty<Real> &_pressure_av;
   const MaterialProperty<Real> &_pressure_av_old;
+  const MaterialProperty<Real> &_pressure_av_older;
 
   bool _call_condition;
 
