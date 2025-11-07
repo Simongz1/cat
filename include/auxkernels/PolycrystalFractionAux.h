@@ -26,8 +26,14 @@ public:
 
   PolycrystalFractionAux(const InputParameters & parameters);
   const std::string _csv_fraction;
+  const std::string _csv_fraction_pore;
   const VariableValue &_density_i;
+  const unsigned int _bulk_MicroID;
+  const Real _bulk_RDX_fraction;
+  const std::vector<unsigned int> _range_pore;
+
   std::vector<std::vector<Real>> _csv_total_fraction;
+  std::vector<std::vector<Real>> _csv_total_fraction_pore;
 protected:
   virtual Real computeValue() override;
   virtual std::vector<std::vector<Real>> readCSV(const std::string csv_file_name);

@@ -63,19 +63,26 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addRequiredParam<std::string>("csv_shock", "csv_shock");
   params.addRequiredParam<std::string>("csv_react", "csv_react");
   params.addRequiredParam<std::string>("csv_times", "csv_times");
-  params.addRequiredParam<std::string>("csv_density", "csv_density");
+
+  params.addRequiredParam<std::string>("csv_shock_pore", "csv_shock_pore");
+  params.addRequiredParam<std::string>("csv_react_pore", "csv_react_pore");
+  params.addRequiredParam<std::string>("csv_times_pore", "csv_times_pore");
 
   params.addRequiredParam<bool>("use_fitted_eos", "use_fitted_eos");
   params.addRequiredParam<bool>("use_EOS_table", "use_EOS_table");
   params.addRequiredParam<bool>("use_magnitude", "use_magnitude");
   params.addRequiredParam<std::string>("csv_unreacted", "csv_unreacted");
   params.addRequiredParam<std::string>("csv_reacted", "csv_reacted");
-  params.addRequiredParam<Real>("scaling_density", "scaling_density");
   params.addRequiredCoupledVar("density_csv", "density_csv");
 
   //test
   params.addRequiredParam<bool>("use_av_tracking", "use_av_tracking");
 
+  //retrieve bulk ID
+  params.addRequiredParam<unsigned int>("bulk_MicroID", "bulk_MicroID");
+
+  //retrieve range for pore IDS
+  params.addRequiredParam<std::vector<unsigned int>>("range_pore", "range_pore");
   return params;
 }
 
@@ -158,9 +165,11 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _csv_shock(getParam<std::string>("csv_shock")),
     _csv_react(getParam<std::string>("csv_react")),
     _csv_times(getParam<std::string>("csv_times")),
-    _csv_density(getParam<std::string>("csv_density")),
 
-    //read densities
+    //csv retrieval for pore
+    _csv_shock_pore(getParam<std::string>("csv_shock_pore")),
+    _csv_react_pore(getParam<std::string>("csv_react_pore")),
+    _csv_times_pore(getParam<std::string>("csv_times_pore")),
 
     //declare time
 
@@ -171,26 +180,27 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _use_magnitude(getParam<bool>("use_magnitude")),
     _csv_unreacted(getParam<std::string>("csv_unreacted")),
     _csv_reacted(getParam<std::string>("csv_reacted")),
-  //here I cache the table only once
     _density(declareADProperty<Real>("density")),
-    //_density_old(getMaterialPropertyOld<Real>("density")),
-    //_scaling_density(getParam<Real>("scaling_density")),
     _density_csv(coupledValue("density_csv")),
+    _use_av_tracking(getParam<bool>("use_av_tracking")),
 
-    //test
-    _use_av_tracking(getParam<bool>("use_av_tracking"))
+    //bulk grains assignment
+    _bulk_MicroID(getParam<unsigned int>("bulk_MicroID")),
+    _range_pore(getParam<std::vector<unsigned int>>("range_pore"))
 {
   //here I cache the table only once
   _csv_total_shock = readCSV(_csv_shock);
   _csv_total_react = readCSV(_csv_react);
   _csv_total_times = readCSV(_csv_times);
-  _csv_total_density = readCSV(_csv_density);
+
+  _csv_total_shock_pore = readCSV(_csv_shock_pore);
+  _csv_total_react_pore = readCSV(_csv_react_pore);
+  _csv_total_times_pore = readCSV(_csv_times_pore);
   //
   _csv_total_pu = readCSV(_csv_unreacted);
   _csv_total_pr = readCSV(_csv_reacted);
 
-  //test: get pressure from table
-
+  //retrieve nanoPBX csv data
 
   for (auto &row : _csv_total_shock){
     if (row.size() < 2){
@@ -209,8 +219,6 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _temperature_values_react.push_back(std::move(temps));
   }
 
-  //test: get times into usable array
-
   for (auto &row : _csv_total_times){
     if (row.size() < 2){
       mooseError("need bigger CSV");
@@ -219,18 +227,33 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _time_values.push_back(std::move(times));
   }
 
-  //test: get densities
-
-  for (auto &row : _csv_total_density){
+  //retrieve csv data for pore
+  for (auto &row : _csv_total_shock_pore){
     if (row.size() < 2){
       mooseError("need bigger CSV");
     }
-    std::vector<Real> densities(row.begin() + 1, row.end());
-    _density_values.push_back(std::move(densities));
+    _up_values_pore.push_back(row[0]);
+    std::vector<Real> temps(row.begin() + 1, row.end());
+    _temperature_values_shock_pore.push_back(std::move(temps));
   }
 
-  //test: define the pressure and jacobian vectors outside of the function to avoid recomputation
+  for (auto &row : _csv_total_react_pore){
+    if (row.size() < 2){
+      mooseError("need bigger CSV");
+    }
+    std::vector<Real> temps(row.begin() + 1, row.end());
+    _temperature_values_react_pore.push_back(std::move(temps));
+  }
 
+  for (auto &row : _csv_total_times_pore){
+    if (row.size() < 2){
+      mooseError("need bigger CSV");
+    }
+    std::vector<Real> times(row.begin() + 1, row.end());
+    _time_values_pore.push_back(std::move(times));
+  }
+
+  ////////////////////////////////////////////////////////////////
   //the csv structure is J, P_u, P_r
   //this gets the pressures as a list on a vector
   for (auto &row : _csv_total_pu){
@@ -241,10 +264,6 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _Pu_values.push_back(row[1]);
   }
 
-  //invert the list
-  //std::reverse(_Ju_values.begin(), _Ju_values.end());
-  //std::reverse(_Pu_values.begin(), _Pu_values.end());
-
   for (auto &row : _csv_total_pr){
     if (row.size() < 2){
       mooseError("need bigger CSV for pressures reacted");
@@ -252,32 +271,23 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _Jr_values.push_back(row[0]);
     _Pr_values.push_back(row[1]);
   }
-
-  //invert the list
-  //std::reverse(_Jr_values.begin(), _Jr_values.end());
-  //std::reverse(_Pr_values.begin(), _Pr_values.end());
-
+  ////////////////////////////////////////////////////////////////
 }
 
 void 
 ADComputeIntPValRDXMISTERnetNSFull::initQpStatefulProperties()
 {
-  _v_flag[_qp] = 0.0; //initialize flag
+  _v_flag[_qp] = 0.0;
   _stored_shock = _temperature_mister_shock_old[_qp];
   _stored_react = _temperature_mister_react_old[_qp];
   _stored_time  = _time_react_old[_qp];
-  //_stored_density = _density_old[_qp];
   _called_up[_qp] = _called_up_old[_qp];
-
-  ///////////////////////////
-  
-
 }
 
 void
 ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
 {
-  //store density
+  //store density in material property
   _density[_qp] = ADReal(_density_csv[_qp]);
   //KEEP THIS ORDER
 
@@ -288,7 +298,6 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   _temperature_mister_react[_qp] = _temperature_mister_react_old[_qp];
   _time_react[_qp] = _time_react_old[_qp];
   _called_up[_qp] = _called_up_old[_qp];
-  //_density[_qp] = ADReal(_density_old[_qp]);
 
   //ORDER 2
   //activate shock heat: call when velocity is bigger than a value 1
@@ -322,11 +331,14 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   bool _call_condition = false;
 
   if (_use_av_tracking){
-    const Real av_old = std::max(_pressure_av_old[_qp], 0.);
-    const Real av_older = std::max(_pressure_av_older[_qp], 0.);
+    Real av = MetaPhysicL::raw:value(P_av);
+    Real av_old = std::max(_pressure_av_old[_qp], 0.);
+    Real av_older = std::max(_pressure_av_older[_qp], 0.);
 
     //previous timestep derivative
-    const Real av_diff = (av_old - av_older) / _dt;
+    Real av_diff = (av - av_old) / _dt;
+    Real av_diff_old = (av_old - av_older) / _dt;
+    Real av_2diff = (av_diff - av_diff_old) / (2 * _dt);
     
     if (av_older < 0. && std::abs(av_old) < 1e-1 && av_diff > 0.){
       _call_condition = true;
@@ -339,25 +351,59 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   if (_call_condition){ //we need V and A constraints to make sure the call happens at the actual shock velocity
     _v_flag[_qp] = 1.0; //set flag to one, call in misternet material as condition for ComputeQpProperties
     //get temperatures
-    const int id_call = (_density_i[_qp]);
+    const int id_call = static_cast<int>(std::round(_density_i[_qp]));
 
     //test: clamp velocity to values
-    Real pred_shock = getTemperatures(std::clamp(std::abs(MetaPhysicL::raw_value(_vx[_qp])), 0.0, 4.89), id_call)[0];
-    Real pred_react = getTemperatures(std::clamp(std::abs(MetaPhysicL::raw_value(_vx[_qp])), 0.0, 4.89), id_call)[1];
-    Real pred_time  = getTimes(std::clamp(std::abs(MetaPhysicL::raw_value(_vx[_qp])), 0.0, 4.89), id_call);
-    Real pred_density = getDensity(std::clamp(std::abs(MetaPhysicL::raw_value(_vx[_qp])), 0.0, 4.89), id_call);
+    //here we need to branch if we are using bulk or MicroID values
 
+    //declare values for binder
+    Real pred_shock, pred_react, pred_time;
+
+    //define cases
+  
+    const bool is_pore = (id_call >= _range_pore[0] && id_call <= _range_pore[1]);
+    const bool is_bulk = (id_call == _bulk_MicroID);
+    const bool is_binder = (!is_pore && !is_bulk);
+
+    //define call velocity explicitly
+    const Real call_up = std::clamp(std::abs(MetaPhysicL::raw_value(_vx[_qp])), 0.0, 4.89);
+
+    //retrieve data based on grain or binder
+    if (is_binder){ //this is the usual loop
+      //assign hand coded values as placeholders
+      pred_shock = getTemperatures(call_up, id_call, "binder")[0];
+      pred_react = getTemperatures(call_up, id_call, "binder")[1];
+      pred_time  = getTimes(call_up, id_call, "binder");
+    }
+    else if (is_pore){ //this is the loop for grains (pore + bulk)
+      //manually clamp the id
+      int id_call_pore;
+      if (id_call >= _range_pore.back()){
+        id_call_pore = _range_pore.back();
+      }
+      if (id_call <= _range_pore.front()){
+        id_call_pore = _range_pore.front();
+      }
+
+      pred_shock = getTemperatures(call_up, id_call_pore, "pore")[0];
+      pred_react = getTemperatures(call_up, id_call_pore, "pore")[1];
+      pred_time  = getTimes(call_up, id_call_pore, "pore");
+    }
+    else{
+      pred_shock = getTemperatures(call_up, id_call, "bulk")[0];
+      pred_react = getTemperatures(call_up, id_call, "bulk")[1];
+      pred_time  = getTimes(call_up, id_call, "bulk");
+    }
+  
     //store in material property
     _temperature_mister_shock[_qp] = pred_shock;
     _temperature_mister_react[_qp] = pred_react;
     _time_react[_qp]               = pred_time;
-    //_density[_qp] = ADReal(_density_csv[_qp]);
 
     //get the temeprature at the initial qp
     _stored_shock = pred_shock;
     _stored_react = pred_react;
     _stored_time  = pred_time;
-    _stored_density = pred_density;
 
     //store the called up value
     _called_up[_qp] = std::abs(MetaPhysicL::raw_value(_vx[_qp]));
@@ -370,7 +416,6 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
     _temperature_mister_shock[_qp] = _temperature_mister_shock[0];
     _temperature_mister_react[_qp] = _temperature_mister_react[0];
     _time_react[_qp]               = _time_react[0];
-    //_density[_qp] = ADReal(_density[0]);
     _called_up[_qp] = _called_up[0];
   }
 
@@ -500,35 +545,71 @@ ADComputeIntPValRDXMISTERnetNSFull::readCSV(const std::string csv_file_name){
 }
 
 std::vector<Real>
-ADComputeIntPValRDXMISTERnetNSFull::getTemperatures(const Real up, const int id){
+ADComputeIntPValRDXMISTERnetNSFull::getTemperatures(const Real up, const int id, const std::string phase){
 
   Real lower_bound;
   Real upper_bound;
+
   Real interval_number;
+
   std::vector<Real> lower_temps_shock;
   std::vector<Real> upper_temps_shock;
 
   std::vector<Real> lower_temps_react;
   std::vector<Real> upper_temps_react;
 
-  for (unsigned int i = 1; i < _up_values.size(); ++i){
-    if (_up_values[i] > up) {
-      lower_bound = _up_values[i - 1];
-      upper_bound = _up_values[i];
-      interval_number = i - 1;
+  //here we need to branch based on the phase
+  if (phase == "binder"){
+    for (unsigned int i = 1; i < _up_values.size(); ++i){
+      if (_up_values[i] > up){
+        lower_bound = _up_values[i - 1];
+        upper_bound = _up_values[i];
+        interval_number = i - 1;
+        _interval = interval_number;
+        
+        lower_temps_shock = _temperature_values_shock[i - 1];
+        upper_temps_shock = _temperature_values_shock[i];
 
-      //test: save the interval number on the fly
-      _interval = interval_number;
-
-      lower_temps_shock = _temperature_values_shock[i - 1];
-      upper_temps_shock = _temperature_values_shock[i];
-
-      lower_temps_react = _temperature_values_react[i - 1];
-      upper_temps_react = _temperature_values_react[i];
-      break;
+        lower_temps_react = _temperature_values_react[i - 1];
+        upper_temps_react = _temperature_values_react[i];
+        break;
+      }
     }
   }
-  
+  else if (phase == "pore"){
+    for (unsigned int j = 1; j < _up_values_pore.size(); ++j){
+      if (_up_values_pore[j] > up){
+        lower_bound = _up_values_pore[j - 1];
+        upper_bound = _up_values_pore[j];
+        interval_number = j - 1;
+        _interval = interval_number;
+
+        lower_temps_shock = _temperature_values_shock_pore[j - 1];
+        upper_temps_shock = _temperature_values_shock_pore[j];
+
+        lower_temps_react = _temperature_values_react_pore[j - 1];
+        upper_temps_react = _temperature_values_react_pore[j];
+        break;
+      }
+    }
+  }
+  else if (phase == "bulk"){
+    for (unsigned int k = 1; k < _up_values.size(); ++k){
+      if (_up_values[k] > up){
+        lower_bound = _up_values[k - 1];
+        upper_bound = _up_values[k];
+        interval_number = k - 1;
+        _interval = interval_number;
+        
+        lower_temps_shock = _temperature_values_shock[k - 1];
+        upper_temps_shock = _temperature_values_shock[k];
+
+        lower_temps_react = _temperature_values_react[k - 1];
+        upper_temps_react = _temperature_values_react[k];
+        break;
+      }
+    }
+  }
 
   Real t = (up - lower_bound) / (upper_bound - lower_bound);
 
@@ -537,46 +618,90 @@ ADComputeIntPValRDXMISTERnetNSFull::getTemperatures(const Real up, const int id)
   _ratio = t;
 
   //interpolate temperatures based on t
-
+  //these interpolation steps are naive to the microstructure type
   std::vector<Real> interpolated_temps_shock = interpolation(lower_temps_shock, upper_temps_shock, t); //this had an error
   std::vector<Real> interpolated_temps_react = interpolation(lower_temps_react, upper_temps_react, t);
-  Real temp_shock = interpolated_temps_shock.at(id);
-  Real temp_react = interpolated_temps_react.at(id);
 
-  //add the interpolation of the time to deflagration with the new data
-  
+  //here we need to do branching again based on the type of microstructure
+  Real temp_shock;
+  Real temp_react;
+
+  if (phase == "binder"){ //traditional branch
+    temp_shock = interpolated_temps_shock.at(id);
+    temp_react = interpolated_temps_react.at(id);
+  }
+  if (phase == "pore"){
+    //the pore microstructures are 101, 102, 103, so we need to subtract to access the data
+    int id_pore = static_cast<int>(std::round(id - _range_pore.front()));
+
+    id_pore = std::max(0, std::min(id_pore, static_cast<int>(interpolated_temps_shock.size()) - 1));
+    
+    //now access pore data
+    temp_shock = interpolated_temps_shock.at(id_pore);
+    temp_react = interpolated_temps_react.at(id_pore);
+  }
+  if (phase == "bulk"){
+    //bulk will preserve the nanoPBX data, but will be called all at an insensitive microstructure
+    const int id_bulk = 20; //the most insensitive, this can be tuned until bulk data is available
+    
+    //now access bulk data
+    temp_shock = interpolated_temps_shock.at(id_bulk);
+    temp_react = interpolated_temps_shock.at(id_bulk);
+  }
+
   return {temp_shock, temp_react};
 }
 
+//times will be edited in a similar manner to account for different phases
+
 Real
-ADComputeIntPValRDXMISTERnetNSFull::getTimes(const Real up, const int id){
+ADComputeIntPValRDXMISTERnetNSFull::getTimes(const Real up, const int id, const std::string phase){
 
   //create times lower and upper
   std::vector<Real> lower_times;
   std::vector<Real> upper_times;
 
   //define lower and upper times
+  //here we account for the phase of the element
 
-  lower_times = _time_values[_interval];
-  upper_times = _time_values[_interval + 1];
+  if (phase == "binder"){
+    //traditional branch
+    lower_times = _time_values[_interval];
+    upper_times = _time_values[_interval + 1];
+  }
+  if (phase == "pore"){
+    //here we use the pore time values
+    lower_times = _time_values_pore[_interval];
+    upper_times = _time_values_pore[_interval + 1];
+  }
+  if (phase == "bulk"){
+    //preserve base nanoPBX
+    lower_times = _time_values[_interval];
+    upper_times = _time_values[_interval + 1];
+  }
 
   //interpolate based on previously computed interval and balance number
   std::vector<Real> interpolated_times = interpolation(lower_times, upper_times, _ratio); //this had an error
   
-  return interpolated_times.at(id);
-}
+  //return based on microstructures
+  Real time_value;
 
-Real
-ADComputeIntPValRDXMISTERnetNSFull::getDensity(const Real up, const int id){
-  std::vector<Real> lower_densities;
-  std::vector<Real> upper_densities;
+  if (phase == "binder"){
+    time_value = interpolated_times.at(id);
+  }
 
-  lower_densities = _density_values[_interval];
-  upper_densities = _density_values[_interval + 1];
+  if (phase == "pore"){
+    const int id_pore = id - 101;
+    time_value = interpolated_times.at(id_pore);
+  }
 
-  std::vector<Real> interpolated_densities = interpolation(lower_densities, upper_densities, _ratio);
-  
-  return interpolated_densities.at(id);
+  if (phase == "bulk"){
+    const int id_bulk = 0;
+    time_value = interpolated_times.at(id_bulk);
+  }
+
+  //return whatever value went through
+  return time_value;
 }
 
 //std::vector<Real>
@@ -661,3 +786,5 @@ ADComputeIntPValRDXMISTERnetNSFull::getPressures(const Real J)
   const Real Pr = interp_no_extrap(J, _Jr_values, _Pr_values);
   return {Pu, Pr};
 }
+
+//test: generate a function to retrieve temperatures, times, and densities

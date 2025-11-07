@@ -23,6 +23,7 @@ public:
   virtual void finalize() override; 
   virtual void initialSetup() override;
   virtual std::vector<std::vector<Real>> readCSV(const std::string csv_file_name);
+  virtual Real assignPoreValue(unsigned int grain_id, const Elem * elem, bool is_grain, Real rand_value);
 protected:
   unsigned int _num_grains;
   const std::vector<unsigned int> _target_grains;
@@ -35,10 +36,21 @@ protected:
   const std::vector<unsigned int> _sizes;
   const std::vector<Real> _sizes_fraction;
   const std::string _csv_fraction;
-  //const VariableValue &_density_i;
+  const std::string _csv_fraction_pore;
+  const bool _bulk_grains;
+  const unsigned int _n_cracks;
+  const unsigned int _l_cracks;
+  const unsigned int _n_pores;
+
+  const unsigned int _bulk_MicroID;
+  const Real _bulk_RDX_fraction;
+  const std::vector<unsigned int> _range_pore;
+  const Real _pore_RDX_fraction;
+
 
   ////////////////
   std::vector<std::vector<Real>> _csv_total_fractions;
+  std::vector<std::vector<Real>> _csv_total_fractions_pore;
   
   std::vector<Point> _centers;
   std::vector<Real> _radii;

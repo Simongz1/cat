@@ -85,7 +85,6 @@ protected:
   Real _stored_shock;
   Real _stored_react;
   Real _stored_time;
-  Real _stored_density;
 
   MaterialProperty<Real> &_called_up;
   const MaterialProperty<Real> &_called_up_old;
@@ -100,7 +99,10 @@ protected:
   const std::string _csv_shock;
   const std::string _csv_react;
   const std::string _csv_times;
-  const std::string _csv_density;
+
+  const std::string _csv_shock_pore;
+  const std::string _csv_react_pore;
+  const std::string _csv_times_pore;
 
   MaterialProperty<Real> &_time_react;
   const MaterialProperty<Real> &_time_react_old;
@@ -112,25 +114,34 @@ protected:
   const std::string _csv_unreacted;
   const std::string _csv_reacted;
   ADMaterialProperty<Real> &_density;
-  //const MaterialProperty<Real> &_density_old;
-  //const Real _scaling_density;
+
   const VariableValue &_density_csv;
   const bool _use_av_tracking;
+  const unsigned int _bulk_MicroID;
+  const std::vector<unsigned int> _range_pore;
 
   /////////////////////////////////
 
   std::vector<std::vector<Real>> _csv_total_shock;
   std::vector<std::vector<Real>> _csv_total_react;
   std::vector<std::vector<Real>> _csv_total_times;
-  std::vector<std::vector<Real>> _csv_total_density;
+
+
+  std::vector<std::vector<Real>> _csv_total_shock_pore;
+  std::vector<std::vector<Real>> _csv_total_react_pore;
+  std::vector<std::vector<Real>> _csv_total_times_pore;
+
   //
   std::vector<std::vector<Real>> _csv_total_pu;
   std::vector<std::vector<Real>> _csv_total_pr;
   std::vector<Real> _up_values;
+  std::vector<Real> _up_values_pore;
   std::vector<std::vector<Real>> _temperature_values_shock;
   std::vector<std::vector<Real>> _temperature_values_react;
+  std::vector<std::vector<Real>> _temperature_values_shock_pore;
+  std::vector<std::vector<Real>> _temperature_values_react_pore;
   std::vector<std::vector<Real>> _time_values;
-  std::vector<std::vector<Real>> _density_values;
+  std::vector<std::vector<Real>> _time_values_pore;
 
   //definitions for global interpolation
 
@@ -148,8 +159,7 @@ protected:
   virtual void computeQpProperties() override;
   virtual std::vector<Real> interpolation(const std::vector<Real> A, const std::vector<Real> B, const Real t);
   virtual std::vector<std::vector<Real>> readCSV(const std::string csv_name);
-  virtual std::vector<Real> getTemperatures(const Real up, const int id);
-  virtual Real getTimes(const Real up, const int id);
-  virtual Real getDensity(const Real up, const int id);
+  virtual std::vector<Real> getTemperatures(const Real up, const int id, const std::string phase);
+  virtual Real getTimes(const Real up, const int id, const std::string phase);
   virtual std::vector<Real> getPressures(const Real Jac);
 };
