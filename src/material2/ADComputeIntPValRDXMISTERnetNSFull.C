@@ -331,7 +331,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   bool _call_condition = false;
 
   if (_use_av_tracking){
-    Real av = MetaPhysicL::raw:value(P_av);
+    Real av = MetaPhysicL::raw_value(P_av);
     Real av_old = std::max(_pressure_av_old[_qp], 0.);
     Real av_older = std::max(_pressure_av_older[_qp], 0.);
 

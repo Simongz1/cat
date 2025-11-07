@@ -75,11 +75,17 @@ PolycrystalDensityUO::initialSetup(){
   const Point min_corner = bbox.min();
   const Point max_corner = bbox.max();
 
+  //allocate centers
   _centers.clear();
   _centers.reserve(_num_grains);
 
+  //allocate radii
   _radii.clear();
   _radii.reserve(_num_grains);
+
+  //allocate grainID
+  _grainID.clear();
+  _grainID.reserve(_num_grains);
 
   for (unsigned int i = 0; i < _num_grains; ++i)
   { 
@@ -113,8 +119,6 @@ PolycrystalDensityUO::initialSetup(){
       }else{
         _radii.push_back(_sizes[1]);
       }
-      //here we can assign a grain ID based on the nearest neighbor to each element
-
     }
     }
   }
@@ -155,12 +159,16 @@ PolycrystalDensityUO::initialSetup(){
   auto & sys = _fe_problem.getAuxiliarySystem();
   auto & nl_sys = _fe_problem.getNonlinearSystem(0);
   auto & var = sys.getVariable(_tid, "density_i");
+  auto & var_grainID = sys.getVariable(_tid, "grainID");
   auto & var_Y1 = nl_sys.getVariable(_tid, "Y1");
   const DofMap & dof_map = sys.system().get_dof_map();
   const DofMap & nl_dof_map = nl_sys.system().get_dof_map();
 
   //unordered map for density
   std::unordered_map<dof_id_type, Real> elem_density;
+
+  //unordered map for grainID
+  std::unordered_map<dof_id_type, Real> elem_grainID;
 
   // Write initial values to the variable field
   for (const auto & elem : _fe_problem.mesh().getMesh().active_element_ptr_range())
@@ -170,7 +178,8 @@ PolycrystalDensityUO::initialSetup(){
     Real min_dist = std::numeric_limits<Real>::max();
     Real second_min_dist = std::numeric_limits<Real>::max();
     unsigned int nearest = 0;
-
+    
+    //this finds the nearest center at each element
     for (unsigned int i = 0; i < _centers.size(); ++i)
     {
       const Real d = (centroid - _centers[i]).norm();
@@ -179,6 +188,11 @@ PolycrystalDensityUO::initialSetup(){
         second_min_dist = min_dist;
         min_dist = d;
         nearest = i;
+
+        //use the nearest center to assign the grainID
+        _grainID.push_back(i + 1); //this has an arbitrary reference at 1, 0 will be left for binder
+
+        //now we need to make sure to assign grain ID only from 1 to _n_grains, 0 will be binder
       }
       else if (d < second_min_dist){
         second_min_dist = d;
@@ -199,18 +213,24 @@ PolycrystalDensityUO::initialSetup(){
     //this assigns an artificial/placeholder MicroID to all elements inside grains
     Real density_val;
 
+    //create local variable for grainID to use to assign values later
+    Real grainID;
+
     if (_bulk_grains){
       if (pores_per_grain.count(nearest) && pores_per_grain[nearest].count(elem)){
         const unsigned int n_types = _range_pore.size();
         const unsigned int idx = static_cast<unsigned int>(std::floor(MooseRandom::rand() * n_types)) % n_types;
 
         density_val = static_cast<Real>(_range_pore[idx]);
+        grainID = static_cast<Real>(nearest + 1);
       }
       else if (is_grain){
         density_val = static_cast<Real>(_bulk_MicroID);
+        grainID = static_cast<Real>(nearest + 1);
       }
       else{
         density_val = _range_out[0] + rand_value * (_range_out[1] - _range_out[0]);
+        grainID = 0; //this corresponds to binder
       }
     }
     else {
@@ -219,14 +239,23 @@ PolycrystalDensityUO::initialSetup(){
                   : (_range_out[0] + rand_value * (_range_out[1] - _range_out[0]));
     }
     
+    //here the density value is assigned to the unordered map
     elem_density[elem->id()] = density_val;
+    elem_grainID[elem->id()] = grainID;
 
+    //this is specific for density, replicate for grainID
     std::vector<dof_id_type> dof_indices;
+    std::vector<dof_id_type> dof_indices_grainID;
+
     dof_map.dof_indices(elem, dof_indices, var.number());
+    dof_map.dof_indices(elem, dof_indices_grainID, var_grainID.number());
 
     //this explicit line assigns the computed values of density_val to the auxvariable supplied
     for (auto dof : dof_indices){
       sys.solution().set(dof, density_val);
+    }
+    for (auto dof : dof_indices_grainID){
+      sys.solution().set(dof, grainID);
     }
   }
   sys.solution().close();

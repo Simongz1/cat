@@ -54,5 +54,6 @@ protected:
   
   std::vector<Point> _centers;
   std::vector<Real> _radii;
+  std::vector<Real> _grainID;
 
 };
