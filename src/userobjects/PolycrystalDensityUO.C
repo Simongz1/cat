@@ -34,6 +34,8 @@ PolycrystalDensityUO::validParams()
   params.addRequiredParam<Real>("bulk_RDX_fraction", "bulk_RDX_fraction");
   params.addRequiredParam<std::vector<unsigned int>>("range_pore", "range_pore");
   params.addRequiredParam<Real>("pore_RDX_fraction", "pore_RDX_fraction");
+  params.addParam<Real>("pore_probability", 0.01, "pore_probability"); //defaul value
+  params.addParam<bool>("euler_angles", true, "euler_angles");
   return params;
 }
 
@@ -62,7 +64,9 @@ PolycrystalDensityUO::PolycrystalDensityUO(const InputParameters & params)
 
     //pore parameters
     _range_pore(getParam<std::vector<unsigned int>>("range_pore")),
-    _pore_RDX_fraction(getParam<Real>("pore_RDX_fraction"))
+    _pore_RDX_fraction(getParam<Real>("pore_RDX_fraction")),
+    _pore_probability(getParam<Real>("pore_probability")),
+    _euler_angles(getParam<bool>("euler_angles"))
 {
     _csv_total_fractions = readCSV(_csv_fraction);
     _csv_total_fractions_pore = readCSV(_csv_fraction_pore);
@@ -146,7 +150,7 @@ PolycrystalDensityUO::initialSetup(){
         if (d < _radii[gid]){
           const Real r = MooseRandom::rand();
 
-          if (r < 0.01){ //this threshold can be changed to generate more pore sites
+          if (r < _pore_probability){ //this threshold can be changed to generate more pore sites
             pores_per_grain[gid].insert(elem);
             count++;
           }
@@ -163,6 +167,31 @@ PolycrystalDensityUO::initialSetup(){
   auto & var_Y1 = nl_sys.getVariable(_tid, "Y1");
   const DofMap & dof_map = sys.system().get_dof_map();
   const DofMap & nl_dof_map = nl_sys.system().get_dof_map();
+
+  auto & var_euler1 = sys.getVariable(_tid, "euler1");
+  auto & var_euler2 = sys.getVariable(_tid, "euler2");
+  auto & var_euler3 = sys.getVariable(_tid, "euler3");
+
+  std::unordered_map<dof_id_type, Real> elem_euler1;
+  std::unordered_map<dof_id_type, Real> elem_euler2;
+  std::unordered_map<dof_id_type, Real> elem_euler3;
+
+  //generate euler angles vectors
+  std::vector<Real> grain_euler1(_num_grains), grain_euler2(_num_grains), grain_euler3(_num_grains);
+
+  if (_euler_angles){
+    MooseRandom::seed(1234);
+
+    for (unsigned int g = 0; g < _num_grains; ++g){
+      grain_euler1[g] = MooseRandom::rand();
+      grain_euler2[g] = MooseRandom::rand();
+      grain_euler3[g] = MooseRandom::rand();
+    }
+
+    if (_tid == 0){
+      mooseInfo("Generated random euler fractions");
+    }
+  }
 
   //unordered map for density
   std::unordered_map<dof_id_type, Real> elem_density;
@@ -216,6 +245,11 @@ PolycrystalDensityUO::initialSetup(){
     //create local variable for grainID to use to assign values later
     Real grainID;
 
+    //declare real assignments
+    Real euler1 = 0.;
+    Real euler2 = 0.;
+    Real euler3 = 0.;
+
     if (_bulk_grains){
       if (pores_per_grain.count(nearest) && pores_per_grain[nearest].count(elem)){
         const unsigned int n_types = _range_pore.size();
@@ -223,10 +257,19 @@ PolycrystalDensityUO::initialSetup(){
 
         density_val = static_cast<Real>(_range_pore[idx]);
         grainID = static_cast<Real>(nearest + 1);
+
+        //assign euler
+        euler1 = grain_euler1[nearest];
+        euler2 = grain_euler2[nearest];
+        euler3 = grain_euler3[nearest];
       }
       else if (is_grain){
         density_val = static_cast<Real>(_bulk_MicroID);
         grainID = static_cast<Real>(nearest + 1);
+
+        euler1 = grain_euler1[nearest];
+        euler2 = grain_euler2[nearest];
+        euler3 = grain_euler3[nearest];
       }
       else{
         density_val = _range_out[0] + rand_value * (_range_out[1] - _range_out[0]);
@@ -243,9 +286,36 @@ PolycrystalDensityUO::initialSetup(){
     elem_density[elem->id()] = density_val;
     elem_grainID[elem->id()] = grainID;
 
+    elem_euler1[elem->id()] = euler1;
+    elem_euler2[elem->id()] = euler2;
+    elem_euler3[elem->id()] = euler3;
+
     //this is specific for density, replicate for grainID
     std::vector<dof_id_type> dof_indices;
     std::vector<dof_id_type> dof_indices_grainID;
+
+    //generate dof map if euler angles is set
+    if (_euler_angles){
+      std::vector<dof_id_type> dof_indices_euler1;
+      std::vector<dof_id_type> dof_indices_euler2;
+      std::vector<dof_id_type> dof_indices_euler3;
+
+      dof_map.dof_indices(elem, dof_indices_euler1, var_euler1.number());
+      dof_map.dof_indices(elem, dof_indices_euler2, var_euler2.number());
+      dof_map.dof_indices(elem, dof_indices_euler3, var_euler3.number());
+
+      //write into variable
+
+      for (auto dof : dof_indices_euler1){
+        sys.solution().set(dof, euler1);
+      }
+      for (auto dof : dof_indices_euler2){
+        sys.solution().set(dof, euler2);
+      }
+      for (auto dof : dof_indices_euler3){
+        sys.solution().set(dof, euler3);
+      }
+    }
 
     dof_map.dof_indices(elem, dof_indices, var.number());
     dof_map.dof_indices(elem, dof_indices_grainID, var_grainID.number());

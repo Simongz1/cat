@@ -46,7 +46,8 @@ protected:
   const Real _bulk_RDX_fraction;
   const std::vector<unsigned int> _range_pore;
   const Real _pore_RDX_fraction;
-
+  const Real _pore_probability;
+  const bool _euler_angles;
 
   ////////////////
   std::vector<std::vector<Real>> _csv_total_fractions;

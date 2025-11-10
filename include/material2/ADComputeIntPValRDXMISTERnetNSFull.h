@@ -118,6 +118,7 @@ protected:
   const VariableValue &_density_csv;
   const bool _use_av_tracking;
   const unsigned int _bulk_MicroID;
+  const unsigned int _bulk_sensitivity;
   const std::vector<unsigned int> _range_pore;
 
   /////////////////////////////////

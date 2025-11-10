@@ -6,6 +6,7 @@
 #include "SingleVariableReturnMappingSolution.h"
 #include "Function.h"
 #include "DerivativeMaterialInterface.h"
+#include <cmath>
 
 /* This class implements the Simo-Hughes style J2 plasticity */
 class ADAnisoStress
@@ -32,6 +33,8 @@ protected:
   virtual Real computeDerivative(const Real & effective_trial_stress, const Real & scalar) override;
   virtual void
   preStep(const Real & scalar_old, const Real & residual, const Real & jacobian) override;
+
+  virtual RankTwoTensor getRotationMatrix(const Real euler1, const Real euler2, const Real euler3);
   /// @}
 
   const MaterialPropertyName _elasticity_tensor_name;
@@ -70,7 +73,6 @@ protected:
   //MaterialProperty<RankTwoTensor> &_pressure_av;
   const MaterialProperty<RankTwoTensor> &_deformation_gradient;
   const MaterialProperty<RankTwoTensor> &_deformation_gradient_old;
-  const Real _bulk;
   const ADMaterialProperty<Real> &_pressure_total;
 
   MaterialProperty<RankTwoTensor> &_plastic_strain;
@@ -80,6 +82,13 @@ protected:
   MaterialProperty<Real> &_hsp;
   const MaterialProperty<RankTwoTensor> &_cauchy_stress;
   const ADVariableValue &_Yinitial;
+
+  //euler angles
+  const VariableValue &_euler1;
+  const VariableValue &_euler2;
+  const VariableValue &_euler3;
+
+  RankFourTensor _rotated_elasticity_tensor;
 
 private:
   /// @{ Helper (dummy) variables for iteratively updating the consistant tangent during return mapping

@@ -80,6 +80,7 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
 
   //retrieve bulk ID
   params.addRequiredParam<unsigned int>("bulk_MicroID", "bulk_MicroID");
+  params.addParam<unsigned int>("bulk_sensitivity", 20, "bulk_sensitivity");
 
   //retrieve range for pore IDS
   params.addRequiredParam<std::vector<unsigned int>>("range_pore", "range_pore");
@@ -186,6 +187,7 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
 
     //bulk grains assignment
     _bulk_MicroID(getParam<unsigned int>("bulk_MicroID")),
+    _bulk_sensitivity(getParam<unsigned int>("bulk_sensitivity")),
     _range_pore(getParam<std::vector<unsigned int>>("range_pore"))
 {
   //here I cache the table only once
@@ -642,11 +644,11 @@ ADComputeIntPValRDXMISTERnetNSFull::getTemperatures(const Real up, const int id,
   }
   if (phase == "bulk"){
     //bulk will preserve the nanoPBX data, but will be called all at an insensitive microstructure
-    const int id_bulk = 20; //the most insensitive, this can be tuned until bulk data is available
+    int id_bulk = _bulk_sensitivity; //the most insensitive, this can be tuned until bulk data is available
     
     //now access bulk data
     temp_shock = interpolated_temps_shock.at(id_bulk);
-    temp_react = interpolated_temps_shock.at(id_bulk);
+    temp_react = interpolated_temps_react.at(id_bulk);
   }
 
   return {temp_shock, temp_react};
