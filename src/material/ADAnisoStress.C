@@ -286,15 +286,17 @@ ADAnisoStress::preStep(const Real & scalar, const Real & R, const Real & J)
     return;
 
   const auto I = RankTwoTensor::Identity();
-  const Real G = ElasticityTensorTools::getIsotropicShearModulus(_rotated_elasticity_tensor);
 
   // Update the flow stress
   _ep[_qp] = _ep_old[_qp] + scalar;
   _flow_stress_material->computePropertiesAtQp(_qp);
 
+  RankTwoTensor CN = _rotated_elasticity_tensor * _Np[_qp];
+  Real NCN = _Np[_qp].doubleContraction(CN);
+
   _d_R_d_betr =
-      G * _Np[_qp] - G * scalar * I - (G * _be[_qp].trace() + _dH[_qp]) * _d_deltaep_d_betr;
-  _d_J_d_betr = -G * I - _d2H[_qp] * _d_deltaep_d_betr;
+      CN - scalar * I - (NCN * _be[_qp].trace() + _dH[_qp]) * _d_deltaep_d_betr;
+  _d_J_d_betr = -CN - _d2H[_qp] * _d_deltaep_d_betr;
   _d_deltaep_d_betr += -1 / J * _d_R_d_betr + R / J / J * _d_J_d_betr;
 }
 

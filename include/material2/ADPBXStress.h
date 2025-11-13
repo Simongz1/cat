@@ -89,6 +89,10 @@ protected:
   const Real _binder_bulk;
   const Real _binder_shear;
 
+  const ADMaterialProperty<Real> &_P_unreacted;
+  const ADMaterialProperty<Real> &_P_reacted;
+  const ADMaterialProperty<Real> &_P_av;
+
   //declare properties
   Real _mixture_shear;
   Real _mixture_bulk;

@@ -24,6 +24,10 @@ ADComputeMISTERnetHeat::validParams()
 
   //for surrogate chemistry rate
   params.addRequiredCoupledVar("fraction_csv", "fraction_csv");
+
+  //test: implementation of elemental integral
+  params.addParam<bool>("correction_heat", false, "correction_heat: parameter to accont for elemental volume on energy conservation");
+  params.addParam<Real>("dirac_tolerance", 0., "dirac_tolerance");
   return params;
 }
 
@@ -56,7 +60,10 @@ ADComputeMISTERnetHeat::ADComputeMISTERnetHeat(const InputParameters & parameter
     _temp_crit(getParam<bool>("temp_crit")),
     _time_shock(declareProperty<Real>("time_shock")),
     _h(getParam<Real>("element_size")),
-    _fraction_csv(coupledValue("fraction_csv"))
+    _fraction_csv(coupledValue("fraction_csv")),
+
+    _dirac_tolerance(getParam<Real>("dirac_tolerance")),
+    _correction_heat(getParam<bool>("correction_heat"))
 
 {}
 
@@ -64,8 +71,8 @@ void
 ADComputeMISTERnetHeat::computeQpProperties()
 {
 
-  const Real tau_react = std::max(_time_react[_qp], 1e-6);
-  const Real tau_shock = _h / std::clamp(_v_vect[_qp].norm(), 1., 10.); //this computes the actual velocity it takes for the shock to cover an element
+  Real tau_react = std::max(_time_react[_qp], _dt);
+  Real tau_shock = _h / std::clamp(_v_vect[_qp].norm(), 1., 10.); //this computes the actual velocity it takes for the shock to cover an element
 
   _time_shock[_qp] = tau_shock;
 
@@ -77,9 +84,16 @@ ADComputeMISTERnetHeat::computeQpProperties()
     _heatrate_mister_shock[_qp] = 0.0;
   }
 
-  if(_v_flag[_qp] == 1. && _dirac_switch_react[_qp] > 0. && _dirac_switch_react[_qp] < 1.){
-    _heatrate_mister_react[_qp] = (_density[_qp] * _specific_heat[_qp] * 
-                                  (_temperature_mister_react[_qp] - _temperature_mister_shock[_qp]));
+  //test
+  ADReal energy_react = _density[_qp] * _specific_heat[_qp] * (_temperature_mister_react[_qp] - _temperature_mister_shock[_qp]);
+
+  const unsigned int npoints = _qrule->n_points();
+  
+  ADReal correction = _correction_heat ? npoints : 1.;
+  ADReal q_dot = correction * energy_react;
+
+  if(_v_flag[_qp] == 1. && _dirac_switch_react[_qp] > 0. && _dirac_switch_react[_qp] < 1. + _dirac_tolerance){
+    _heatrate_mister_react[_qp] = q_dot;
   }
   else {
     _heatrate_mister_react[_qp] = 0.0;
@@ -87,7 +101,7 @@ ADComputeMISTERnetHeat::computeQpProperties()
 
   bool condition;
   if (_temp_crit){
-    condition = (_temperature_mister_react[_qp] > 2000 ? true : false);
+    condition = (_temperature_mister_react[_qp] > 1000 ? true : false);
   }else{
     condition = (_temperature_mister_react[_qp] > _temperature_mister_shock[_qp] ? true : false);
   }
@@ -95,7 +109,7 @@ ADComputeMISTERnetHeat::computeQpProperties()
   //construct rates
   //we need to define an indicator to turn on and off the surrogate chemistry source
 
-  if(condition && _v_flag[_qp] == 1. && _dirac_switch_react[_qp] > 0. && _dirac_switch_react[_qp] < 1.){ //reaction window
+  if(condition && _v_flag[_qp] == 1. && _dirac_switch_react[_qp] > 0. && _dirac_switch_react[_qp] < 1. + _dirac_tolerance){ //reaction window
     _indicator_surrogate[_qp] = 1.;
   }else{
     _indicator_surrogate[_qp] = 0.;

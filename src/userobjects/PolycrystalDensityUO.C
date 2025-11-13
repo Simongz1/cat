@@ -159,6 +159,9 @@ PolycrystalDensityUO::initialSetup(){
     }
   }
 
+  //here we need to generate cracks in a similar way as we generate the pores
+  
+
   //here starts the variable assignment
   auto & sys = _fe_problem.getAuxiliarySystem();
   auto & nl_sys = _fe_problem.getNonlinearSystem(0);

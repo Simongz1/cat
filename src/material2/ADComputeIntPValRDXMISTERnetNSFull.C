@@ -698,7 +698,7 @@ ADComputeIntPValRDXMISTERnetNSFull::getTimes(const Real up, const int id, const 
   }
 
   if (phase == "bulk"){
-    const int id_bulk = 0;
+    int id_bulk = _bulk_sensitivity;
     time_value = interpolated_times.at(id_bulk);
   }
 

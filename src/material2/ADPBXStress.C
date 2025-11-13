@@ -90,7 +90,12 @@ ADPBXStress::ADPBXStress(
     _fraction_csv(coupledValue("fraction_csv")),
     _binder_yield(getParam<Real>("binder_yield")),
     _binder_bulk(getParam<Real>("binder_bulk")),
-    _binder_shear(getParam<Real>("binder_shear"))
+    _binder_shear(getParam<Real>("binder_shear")),
+
+    //get pressures
+    _P_unreacted(getADMaterialProperty<Real>("pressure_mg")),
+    _P_reacted(getADMaterialProperty<Real>("pressure_JWL")),
+    _P_av(getADMaterialProperty<Real>("pressure_av"))
 {
 }
 
@@ -135,10 +140,10 @@ ADPBXStress::computeQpPK1Stress()
   //here we explicitly use hookes law
   //if rule of mixture
   _mixture_shear = _use_mixture ? 
-                            _fraction_csv[_qp] * G + (1. - _fraction_csv[_qp]) * _binder_shear : 
+                            ((_fraction_csv[_qp] * G) + ((1. - _fraction_csv[_qp]) * _binder_shear)) : 
                             G;
   _mixture_bulk = _use_mixture ? 
-                            _fraction_csv[_qp] * K + (1. - _fraction_csv[_qp]) * _binder_bulk : 
+                            ((_fraction_csv[_qp] * K) + ((1. - _fraction_csv[_qp]) * _binder_bulk)) : 
                             K;
   
   //
@@ -206,9 +211,9 @@ ADPBXStress::computeQpPK1Stress()
   s = _Yinitial[_qp].value() * (_mixture_shear * _be[_qp].deviatoric()); //changed to Yinitial. Only unreacted phase can affort shear stress
 
   //compute pressure on the binder
-  Real pressure_binder = _binder_bulk * (detJ * detJ) / 4.; //check this
+  Real pressure_binder = _binder_bulk * ((detJ * detJ) - 1.) / 4.; //check this
   Real pressure_mixture = _use_mixture ? 
-                          (_fraction_csv[_qp] * _pressure_total[_qp].value() + (1. - _fraction_csv[_qp]) * pressure_binder) : 
+                          _fraction_csv[_qp] * _pressure_total[_qp].value() : 
                           _pressure_total[_qp].value();
                           
   RankTwoTensor tau = pressure_mixture * I + s;
@@ -292,7 +297,7 @@ ADPBXStress::preStep(const Real & scalar, const Real & R, const Real & J)
 
   //use the mixture shear
   _flow_stress_material->computePropertiesAtQp(_qp);
-                                
+
   _d_R_d_betr =
       G * _Np[_qp] - G * scalar * I - (G * _be[_qp].trace() + _dH[_qp]) * _d_deltaep_d_betr;
   _d_J_d_betr = -G * I - _d2H[_qp] * _d_deltaep_d_betr;

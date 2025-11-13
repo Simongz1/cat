@@ -48,6 +48,9 @@ protected:
   const Real _h;
   const VariableValue & _fraction_csv;
 
+  const Real _dirac_tolerance;
+  const bool _correction_heat;
+
   //helper function to get evolved sin target
 
   virtual Real getSinTarget(const Real target, const Real induction, const Real time_tracker);
