@@ -135,7 +135,6 @@ PolycrystalDensityUO::initialSetup(){
   std::unordered_map<unsigned int, std::unordered_set<const Elem *>> pores_per_grain;
 
   //in case we supply number of pores
-
   if (_n_pores > 0){
     MooseRandom::seed(1234);
     for (unsigned int gid = 0; gid < _num_grains; ++gid){
@@ -161,7 +160,6 @@ PolycrystalDensityUO::initialSetup(){
 
   //here we need to generate cracks in a similar way as we generate the pores
   
-
   //here starts the variable assignment
   auto & sys = _fe_problem.getAuxiliarySystem();
   auto & nl_sys = _fe_problem.getNonlinearSystem(0);
@@ -202,7 +200,7 @@ PolycrystalDensityUO::initialSetup(){
   //unordered map for grainID
   std::unordered_map<dof_id_type, Real> elem_grainID;
 
-  // Write initial values to the variable field
+  //write initial values to the variable field
   for (const auto & elem : _fe_problem.mesh().getMesh().active_element_ptr_range())
   {
     Point centroid = elem->vertex_average();
@@ -345,30 +343,30 @@ PolycrystalDensityUO::initialSetup(){
     if (dof_indices_Y1.empty())
       continue;
 
-    // Elemental MicroID assigned earlier
+    //elemental MicroID assigned earlier
     const Real density_value = elem_density[elem->id()];
     const int call_density = static_cast<int>(std::round(density_value));
 
-    // Determine region type
+    //region type conditions
     const bool is_pore = (call_density >= _range_pore[0] && call_density <= _range_pore[1]);
     const bool is_bulk = (call_density == _bulk_MicroID);
     const bool is_binder = (!is_pore && !is_bulk);
 
-    // Assign fraction value
+    //fraction value based on region conditions
     Real predicted_fraction = 0.0;
     if (is_pore || is_bulk)
     {
-      // For now, treat pores and bulk identically
+      //here we assume that pores are 100%RDX MASS FRACTION
       predicted_fraction = _bulk_RDX_fraction;
     }
     else
     {
-      // Binder/interface: use CSV-based value
+      //binder and nanoPBXs
       const int idx = std::clamp(call_density, 0, static_cast<int>(data.size()) - 1);
       predicted_fraction = data[idx];
     }
 
-    // Write the same fraction to all DOFs of this element
+    //write fraction
     for (auto dof : dof_indices_Y1)
       nl_sys.solution().set(dof, predicted_fraction);
   }
@@ -392,6 +390,7 @@ PolycrystalDensityUO::finalize(){
 
 }
 
+//standard function to read CSV data
 std::vector<std::vector<Real>>
 PolycrystalDensityUO::readCSV(const std::string csv_file_name){
   std::ifstream file(csv_file_name);
@@ -421,7 +420,6 @@ PolycrystalDensityUO::readCSV(const std::string csv_file_name){
 }
 
 //create a helper function to assign pore values
-
 //second version
 Real
 PolycrystalDensityUO::assignPoreValue(unsigned int grain_id,
@@ -429,28 +427,28 @@ PolycrystalDensityUO::assignPoreValue(unsigned int grain_id,
                                       bool is_grain,
                                       Real rand_value)
 {
-  // Static counter that persists during setup
+  //define pore counter per grain
   static std::unordered_map<unsigned int, unsigned int> pore_count_per_grain;
 
+  //initially assume that the current element is not a pore
   bool is_pore = false;
 
   if (is_grain)
   {
-    // deterministic pseudo-random number in [0,1) unique to elem+grain
+    //generate a random based on the element ID, this should be tuneable from the input file
     const Real rand_local =
         std::fmod(std::sin(elem->id() * 12.9898 + grain_id * 78.233) * 43758.5453, 1.0);
 
-    // initialize counter for this grain the first time we see it
+    //this means that the element is the last on the appended list => first time seeing it
     if (pore_count_per_grain.find(grain_id) == pore_count_per_grain.end())
       pore_count_per_grain[grain_id] = 0;
 
-    // only allow up to _n_pores per grain
-    // pick the first _n_pores elements with smallest rand_local (< _n_pores / 1000 heuristic range)
-    // or equivalently, use rand_local threshold but enforce upper bound via counter
+    //only allow up to _n_pores per grain
+    //here we use the _n_pores parameter
     if (pore_count_per_grain[grain_id] < _n_pores)
     {
-      // simple stochastic acceptance that tends to spread pores spatially
-      const Real accept_prob = 0.002; // ~0.2% acceptance per candidate
+      //here we also apply a probabilistic pore acceptance fraction
+      const Real accept_prob = 0.002;  //this one also should come from the input file
       if (rand_local < accept_prob)
       {
         is_pore = true;
@@ -459,11 +457,10 @@ PolycrystalDensityUO::assignPoreValue(unsigned int grain_id,
     }
   }
 
-  // ---------- Assign value ----------
+  //value assignments after generation
   Real returnvalue;
   if (is_pore)
   {
-    // pick discrete pore type from _range_pore vector (e.g., 101, 102, 103)
     const unsigned int n_types = _range_pore.size();
     const unsigned int pore_index =
         static_cast<unsigned int>(std::floor(MooseRandom::rand() * n_types)) % n_types;
@@ -471,64 +468,13 @@ PolycrystalDensityUO::assignPoreValue(unsigned int grain_id,
   }
   else if (is_grain)
   {
-    // normal grain material
     returnvalue = static_cast<Real>(_bulk_MicroID);
   }
   else
   {
-    // binder / matrix
     returnvalue = _range_out[0] + rand_value * (_range_out[1] - _range_out[0]);
   }
 
   return returnvalue;
 }
-
-
-//Real
-//PolycrystalDensityUO::assignPoreValue(unsigned int grain_id,
-//                                      const Elem * elem,
-//                                      bool is_grain,
-//                                      Real rand_value)
-//{
-//
-//  //cache pore id per grains
-//  static std::unordered_map<unsigned int, std::vector<unsigned int>> pore_ids_per_grain;
-//
-//  //generate the rand pore set for each grain for the first time
-//  if (pore_ids_per_grain.find(grain_id) == pore_ids_per_grain.end()){
-//    std::vector<unsigned int> selected_ids;
-//    selected_ids.reserve(_n_pores);
-//
-//    MooseRandom::seed(grain_id * 137 + 104729); //these numbers are randomly selected
-//    std::unordered_set<unsigned int> unique_ids;
-//    while (unique_ids.size() < _n_pores){
-//      unsigned int candidate = static_cast<unsigned int>(MooseRandom::rand() * 1e6);
-//      unique_ids.insert(candidate);
-//    }
-//    selected_ids.assign(unique_ids.begin(), unique_ids.end());
-//    pore_ids_per_grain[grain_id] = selected_ids;
-//  }
-//
-//  const unsigned int elem_id_hash = static_cast<unsigned int>(std::fmod(std::sin(elem->id() * 10 + grain_id * 70) * 30000, 1.) * 1e6);
-//
-//  bool is_pore = false;
-//  const auto & selected_ids = pore_ids_per_grain[grain_id];
-//  for (const auto & pid : selected_ids){
-//    if (elem_id_hash == pid){
-//      is_pore = true;
-//      break;
-//    }
-//  }
-//
-//  Real returnvalue;
-//  if (is_pore){
-//    returnvalue = _range_pore[0] + rand_value * (_range_pore[1] - _range_pore[0]);
-//  }
-//  else if(is_grain){
-//    returnvalue = _bulk_MicroID;
-//  }
-//  else{
-//    returnvalue = _range_out[0] + rand_value * (_range_out[1] - _range_out[0]);
-//  }
-//  return returnvalue;
-//}
+////////////////////////////////
