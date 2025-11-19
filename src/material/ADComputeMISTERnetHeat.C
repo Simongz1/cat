@@ -16,8 +16,8 @@ ADComputeMISTERnetHeat::validParams()
   params.addParam<MaterialPropertyName>("density", "density", "Property name of the density material property");
   params.addParam<MaterialPropertyName>("specific_heat", "specific_heat", "Property name of the specific_heat material property");
 
-  params.addRequiredCoupledVar("v_vect", "v_vect");
-  params.addRequiredCoupledVar("a_vect", "a_vect");
+  params.addRequiredCoupledVar("v_components", "v_components");
+  params.addRequiredCoupledVar("a_components", "a_components");
 
   params.addRequiredParam<bool>("temp_crit", "temp_crit");
   params.addRequiredParam<Real>("element_size", "element_size");
@@ -46,9 +46,6 @@ ADComputeMISTERnetHeat::ADComputeMISTERnetHeat(const InputParameters & parameter
     _heatrate_mister_shock(declareADProperty<Real>("heatrate_mister_shock")),
     _heatrate_mister_react(declareADProperty<Real>("heatrate_mister_react")),
     _v_flag(getMaterialProperty<Real>("v_flag")),
-    _v_vect(coupledVectorValue("v_vect")),
-    _a_vect(coupledVectorValue("a_vect")),
-
 
     //Test: formulate a surrogate chemistry evolution source
     _Y1_dot_surrogate(declareADProperty<Real>("Y1_dot_surrogate")),
@@ -65,14 +62,43 @@ ADComputeMISTERnetHeat::ADComputeMISTERnetHeat(const InputParameters & parameter
     _dirac_tolerance(getParam<Real>("dirac_tolerance")),
     _correction_heat(getParam<bool>("correction_heat"))
 
-{}
+{
+  const unsigned int n_v = coupledComponents("v_components");
+  _v.reserve(n_v);
+  for (unsigned int i = 0; i < n_v; ++i)
+    _v.push_back(&coupledValue("v_components", i));
+
+  const unsigned int n_a = coupledComponents("a_components");
+  _a.reserve(n_a);
+  for (unsigned int i = 0; i < n_a; ++i)
+    _a.push_back(&coupledValue("a_components", i));
+}
 
 void
 ADComputeMISTERnetHeat::computeQpProperties()
-{
+{ 
+  std::vector<Real> v_vect(_v.size());
+  std::vector<Real> a_vect(_a.size());
+
+  for (unsigned int i = 0; i < _v.size(); ++i){
+    v_vect[i] = (*_v[i])[_qp];
+  }
+  for (unsigned int j = 0; j < _a.size(); ++j){
+    a_vect[j] = (*_a[j])[_qp];
+  }
+
+  //define inline for L2norm
+  auto L2norm = [](const std::vector<Real> &vect) -> Real
+  {
+    Real sum = 0;
+    for (int i = 0; i < vect.size(); ++i){
+      sum += vect[i] * vect[i];
+    }
+    return std::sqrt(sum);
+  };
 
   Real tau_react = std::max(_time_react[_qp], _dt);
-  Real tau_shock = _h / std::clamp(_v_vect[_qp].norm(), 1., 10.); //this computes the actual velocity it takes for the shock to cover an element
+  Real tau_shock = _h / std::clamp(L2norm(v_vect), 1., 10.); //this computes the actual velocity it takes for the shock to cover an element
 
   _time_shock[_qp] = tau_shock;
 

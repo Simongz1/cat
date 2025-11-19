@@ -39,14 +39,11 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addRequiredParam<Real>("R2", "JWL reacted EOS parameter B2");
   params.addRequiredParam<Real>("omega", "JWL reacted EOS parameter omega");
   //velocity for calling mistnet
-  params.addCoupledVar("vx", "x component of velocity");
-  params.addCoupledVar("ax", "x component of acceleration");
 
-  //test: using both components of v and a to define shock call
-  params.addCoupledVar("vy", "y component of velocity");
-  params.addCoupledVar("ay", "y component of acceleration");
-  params.addCoupledVar("v_vect", "vector variable that stores velocity components");
-  params.addCoupledVar("a_vect", "vector variable that stores acceleration components");
+  //test: retrieve from name array
+  params.addRequiredCoupledVar("v_components", "v_components");
+  params.addRequiredCoupledVar("a_components", "a_components");
+
   params.addRequiredParam<Real>("thr_a", "acceleration threshold");
   params.addRequiredParam<Real>("thr_v", "velocity threshold");
 
@@ -136,14 +133,6 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _R2(getParam<Real>("R2")),
     _omega(getParam<Real>("omega")),
 
-    _vx(adCoupledValue("vx")),
-    _ax(adCoupledValue("ax")),
-    _vy(adCoupledValue("vy")),
-    _ay(adCoupledValue("ay")),
-    //test:vector variable
-    _v_vect(coupledVectorValue("v_vect")),
-    _a_vect(coupledVectorValue("a_vect")),
-
     _thr_a(getParam<Real>("thr_a")),
     _thr_v(getParam<Real>("thr_v")),
     _v_flag(declareProperty<Real>("v_flag")),
@@ -189,7 +178,21 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     _bulk_MicroID(getParam<unsigned int>("bulk_MicroID")),
     _bulk_sensitivity(getParam<unsigned int>("bulk_sensitivity")),
     _range_pore(getParam<std::vector<unsigned int>>("range_pore"))
-{
+{ 
+  /////////////////////////////////////////////////////////
+  const unsigned int n_v = coupledComponents("v_components");
+  _v.reserve(n_v);
+  for (unsigned int i = 0; i < n_v; ++i)
+    _v.push_back(&coupledValue("v_components", i));
+
+  const unsigned int n_a = coupledComponents("a_components");
+  _a.reserve(n_a);
+  for (unsigned int i = 0; i < n_a; ++i)
+    _a.push_back(&coupledValue("a_components", i));
+  
+  /////////////////////////////////////////////////////////
+
+  /////%%%%%%%%%%%%%%%%%%%%%%%%%/////////////////////////%%%%%%%//////
   //here I cache the table only once
   _csv_total_shock = readCSV(_csv_shock);
   _csv_total_react = readCSV(_csv_react);
@@ -306,16 +309,37 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
 
   //test: track shock front using artificial viscosity value
 
+  //build velocity and acceleration vectors
+  std::vector<Real> v_vect(_v.size());
+  std::vector<Real> a_vect(_a.size());
+
+  for (unsigned int i = 0; i < _v.size(); ++i){
+    v_vect[i] = (*_v[i])[_qp];
+  }
+  for (unsigned int j = 0; j < _a.size(); ++j){
+    a_vect[j] = (*_a[j])[_qp];
+  }
+
+  //define inline for L2norm
+  auto L2norm = [](const std::vector<Real> &vect) -> Real
+  {
+    Real sum = 0;
+    for (int i = 0; i < vect.size(); ++i){
+      sum += vect[i] * vect[i];
+    }
+    return std::sqrt(sum);
+  };
+
   Real condition_v;
   Real condition_a;
   
   if(_use_magnitude){
-    condition_v = _v_vect[_qp].norm();
-    condition_a = _a_vect[_qp].norm();
+    condition_v = L2norm(v_vect);
+    condition_a = L2norm(a_vect);
 
   }else{
-    condition_v = std::abs(MetaPhysicL::raw_value(_vx[_qp]));
-    condition_a = std::abs(MetaPhysicL::raw_value(_ax[_qp]));
+    condition_v = v_vect[0];
+    condition_a = a_vect[0];
   }
 
   //////compute AV here
@@ -368,7 +392,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
     const bool is_binder = (!is_pore && !is_bulk);
 
     //define call velocity explicitly
-    const Real call_up = std::clamp(std::abs(MetaPhysicL::raw_value(_vx[_qp])), 0.0, 4.89);
+    const Real call_up = std::clamp(L2norm(v_vect), 0.0, 4.89);
 
     //retrieve data based on grain or binder
     if (is_binder){ //this is the usual loop
@@ -408,7 +432,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
     _stored_time  = pred_time;
 
     //store the called up value
-    _called_up[_qp] = std::abs(MetaPhysicL::raw_value(_vx[_qp]));
+    _called_up[_qp] = L2norm(v_vect);
   }
 
   //ORDER 3
@@ -499,9 +523,9 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   ADReal us;
   
   if (_use_fitted_eos){
-    us = 4.0790 + 1.9370 * _v_vect[_qp].norm();
+    us = 4.0790 + 1.9370 * L2norm(v_vect);
   }else{
-    us = ss + (_s * _v_vect[_qp].norm());
+    us = ss + (_s * L2norm(v_vect));
   }
   _us[_qp] = us;
 }
@@ -788,5 +812,3 @@ ADComputeIntPValRDXMISTERnetNSFull::getPressures(const Real J)
   const Real Pr = interp_no_extrap(J, _Jr_values, _Pr_values);
   return {Pu, Pr};
 }
-
-//test: generate a function to retrieve temperatures, times, and densities

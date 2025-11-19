@@ -33,8 +33,8 @@ protected:
   ADMaterialProperty<Real> & _heatrate_mister_react;
 
   const MaterialProperty<Real> &_v_flag;
-  const VectorVariableValue &_v_vect;
-  const VectorVariableValue &_a_vect;
+  const std::vector<VariableName> _v_components;
+  const std::vector<VariableName> _a_components;
 
   //surrogate chemistry source
 
@@ -50,6 +50,9 @@ protected:
 
   const Real _dirac_tolerance;
   const bool _correction_heat;
+
+  std::vector<const VariableValue *> _v;
+  std::vector<const VariableValue *> _a;
 
   //helper function to get evolved sin target
 

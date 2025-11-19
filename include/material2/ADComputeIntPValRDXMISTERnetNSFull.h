@@ -60,14 +60,8 @@ protected:
   const Real _R2;
   const Real _omega;
   
-  const ADVariableValue &_vx;
-  const ADVariableValue &_ax;
-  const ADVariableValue &_vy;
-  const ADVariableValue &_ay;
-
-  //test:vector variable
-  const VectorVariableValue &_v_vect;
-  const VectorVariableValue &_a_vect;
+  const std::vector<VariableName> _v_components;
+  const std::vector<VariableName> _a_components;
 
   const Real _thr_a;
   const Real _thr_v;
@@ -122,6 +116,9 @@ protected:
   const std::vector<unsigned int> _range_pore;
 
   /////////////////////////////////
+
+  std::vector<const VariableValue *> _v;
+  std::vector<const VariableValue *> _a;
 
   std::vector<std::vector<Real>> _csv_total_shock;
   std::vector<std::vector<Real>> _csv_total_react;
