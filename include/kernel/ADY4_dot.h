@@ -1,0 +1,24 @@
+#pragma once
+
+#include "ADKernel.h"
+
+// Forward Declarations
+class ADY4_dot;
+
+//this kernel computes the term $\frac{\partial (rho Y_1)}{\partial t}$
+//term for the species conservation equation
+
+class ADY4_dot : public ADKernel
+{
+public:
+  ADY4_dot(const InputParameters & parameters);
+  static InputParameters validParams();
+  
+protected:
+  virtual ADReal computeQpResidual() override;
+
+private:
+  std::string _base_name;
+  const ADMaterialProperty<Real> &_Y4dot;
+};
+
