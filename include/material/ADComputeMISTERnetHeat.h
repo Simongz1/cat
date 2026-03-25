@@ -51,6 +51,7 @@ protected:
   const bool _correction_heat;
   const ADMaterialProperty<Real> &_us;
   const bool _use_gating;
+  const bool _use_complete_burn;
 
   std::vector<const ADVariableValue *> _v;
   std::vector<const ADVariableValue *> _a;

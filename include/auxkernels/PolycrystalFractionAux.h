@@ -31,6 +31,10 @@ public:
   const unsigned int _bulk_MicroID;
   const Real _bulk_RDX_fraction;
   const std::vector<unsigned int> _range_pore;
+  const bool _use_loaded_microstructure;
+  const VariableValue * _loaded_microstructure;
+  const Real _pore_limit;
+  const Real _bulk_limit;
 
   std::vector<std::vector<Real>> _csv_total_fraction;
   std::vector<std::vector<Real>> _csv_total_fraction_pore;

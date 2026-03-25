@@ -1,4 +1,5 @@
 #include "PolycrystalDensityUO.h"
+#include "Function.h"
 
 registerMooseObject("mlApp", PolycrystalDensityUO);
 
@@ -36,6 +37,13 @@ PolycrystalDensityUO::validParams()
   params.addRequiredParam<Real>("pore_RDX_fraction", "pore_RDX_fraction");
   params.addParam<Real>("pore_probability", 0.01, "pore_probability"); //defaul value
   params.addParam<bool>("euler_angles", true, "euler_angles");
+
+  //for loaded custom microstructure
+  params.addParam<bool>("use_loaded_microstructure", false, "use_loaded_microstructure");
+  //name to be used to directly retrieve the function
+  params.addParam<FunctionName>("loaded_microstructure", "loaded_microstructure", "loaded_microstructure");
+  params.addParam<Real>("pore_limit", 0.25, "pore_limit");
+  params.addParam<Real>("bulk_limit", 1.77, "bulk_limit");
   return params;
 }
 
@@ -66,7 +74,13 @@ PolycrystalDensityUO::PolycrystalDensityUO(const InputParameters & params)
     _range_pore(getParam<std::vector<unsigned int>>("range_pore")),
     _pore_RDX_fraction(getParam<Real>("pore_RDX_fraction")),
     _pore_probability(getParam<Real>("pore_probability")),
-    _euler_angles(getParam<bool>("euler_angles"))
+    _euler_angles(getParam<bool>("euler_angles")),
+
+    //for loaded microstructure
+    _use_loaded_microstructure(getParam<bool>("use_loaded_microstructure")),
+    _loaded_microstructure_name(getParam<FunctionName>("loaded_microstructure")),
+    _pore_limit(getParam<Real>("pore_limit")),
+    _bulk_limit(getParam<Real>("bulk_limit"))
 {
     _csv_total_fractions = readCSV(_csv_fraction);
     _csv_total_fractions_pore = readCSV(_csv_fraction_pore);
@@ -74,7 +88,7 @@ PolycrystalDensityUO::PolycrystalDensityUO(const InputParameters & params)
 
 void
 PolycrystalDensityUO::initialSetup(){
-    // Generate Voronoi centers once before AuxVariables initialize
+  // Generate Voronoi centers once before AuxVariables initialize
   const BoundingBox bbox = MeshTools::create_bounding_box(_fe_problem.mesh().getMesh());
   const Point min_corner = bbox.min();
   const Point max_corner = bbox.max();
@@ -90,6 +104,9 @@ PolycrystalDensityUO::initialSetup(){
   //allocate grainID
   _grainID.clear();
   _grainID.reserve(_num_grains);
+
+  //get the function that contains the data
+  const Function & loaded_function = getFunction(_loaded_microstructure_name);
 
   for (unsigned int i = 0; i < _num_grains; ++i)
   { 
@@ -126,10 +143,11 @@ PolycrystalDensityUO::initialSetup(){
     }
     }
   }
-
-  if (_tid == 0)
-    mooseInfo("Generated ", _num_grains, " Voronoi centers in PolycrystalDensityUO. Next step is to assign defects inside grains and nanoPBXs at the interfaces");
-
+  ////////////////////////
+  if (_tid == 0){
+     mooseInfo("Generated ", _num_grains, " Voronoi centers in PolycrystalDensityUO. Next step is to assign defects inside grains and nanoPBXs at the interfaces");
+  }
+  ///////////////////////
 
   //here we perform the pore element assignment
   std::unordered_map<unsigned int, std::unordered_set<const Elem *>> pores_per_grain;
@@ -168,6 +186,9 @@ PolycrystalDensityUO::initialSetup(){
   auto & var_Y1 = nl_sys.getVariable(_tid, "Y1");
   const DofMap & dof_map = sys.system().get_dof_map();
   const DofMap & nl_dof_map = nl_sys.system().get_dof_map();
+
+  //loaded microstructure variable
+  //auto & loaded_microstructure = sys.getVariable(_tid, _loaded_microstructure_name);
 
   auto & var_euler1 = sys.getVariable(_tid, "euler1");
   auto & var_euler2 = sys.getVariable(_tid, "euler2");
@@ -228,11 +249,17 @@ PolycrystalDensityUO::initialSetup(){
         second_min_dist = d;
       }
     }
-    //determine if its in a grain or outside
+
+    //generalized definition of three cases
+    bool is_pore = false;
+    bool is_bulk = false;
+    bool is_binder = false;
+    bool is_grain = false;
+    bool is_boundary = false;
+    bool is_far = false;
+
     const Real boundary_gap = (second_min_dist - min_dist);
-    bool is_boundary = boundary_gap < _matrix_thickness;
-    bool is_far = min_dist > _radii[nearest];
-    bool is_grain = !is_boundary && !is_far; //this determines which element is inside a grain
+    
     //
     const bool in_target =
         std::find(_target_grains.begin(), _target_grains.end(), nearest + 1) != _target_grains.end();
@@ -251,12 +278,41 @@ PolycrystalDensityUO::initialSetup(){
     Real euler2 = 0.;
     Real euler3 = 0.;
 
-    if (_bulk_grains){
-      if (pores_per_grain.count(nearest) && pores_per_grain[nearest].count(elem)){
+    Real loaded_density_value = 0.0;
+    if (_bulk_grains){ //use_loaded_microstructure needs this
+      //do the branch here
+      if (_use_loaded_microstructure){
+        //read the function and evaluate at the centroid of each element
+        //const Function & loaded_function = getFunction(_loaded_microstructure_name);
+        loaded_density_value = loaded_function.value(0.0, centroid);
+
+        //define static cases
+        is_pore = loaded_density_value <= _pore_limit;
+        is_bulk = loaded_density_value >= _bulk_limit;
+        is_binder = !is_pore && !is_bulk;
+      }else{
+        //standard approach
+        is_far = min_dist > _radii[nearest];
+        is_boundary = boundary_gap < _matrix_thickness;
+        is_grain = !is_boundary && !is_far;
+        
+        //old assignment
+        is_pore = pores_per_grain.count(nearest) && pores_per_grain[nearest].count(elem);
+        is_bulk = (is_grain && !is_pore);
+        is_binder = (!is_pore && !is_bulk);
+      }
+
+      //now use the defined cases
+      if (is_pore){
+        //standard pore assignment
         const unsigned int n_types = _range_pore.size();
         const unsigned int idx = static_cast<unsigned int>(std::floor(MooseRandom::rand() * n_types)) % n_types;
-
+        
+        //density
         density_val = static_cast<Real>(_range_pore[idx]);
+        grainID = static_cast<Real>(nearest + 1);
+      }else if (is_bulk){
+        density_val = static_cast<Real>(_bulk_MicroID);
         grainID = static_cast<Real>(nearest + 1);
 
         //assign euler
@@ -264,20 +320,25 @@ PolycrystalDensityUO::initialSetup(){
         euler2 = grain_euler2[nearest];
         euler3 = grain_euler3[nearest];
       }
-      else if (is_grain){
-        density_val = static_cast<Real>(_bulk_MicroID);
-        grainID = static_cast<Real>(nearest + 1);
+      //else if (is_grain){
+      //  density_val = static_cast<Real>(_bulk_MicroID);
+      //  grainID = static_cast<Real>(nearest + 1);
 
-        euler1 = grain_euler1[nearest];
-        euler2 = grain_euler2[nearest];
-        euler3 = grain_euler3[nearest];
-      }
+      //  euler1 = grain_euler1[nearest];
+      //  euler2 = grain_euler2[nearest];
+      //  euler3 = grain_euler3[nearest];
+      //}
       else{
         density_val = _range_out[0] + rand_value * (_range_out[1] - _range_out[0]);
         grainID = 0; //this corresponds to binder
       }
-    }
-    else {
+    }else{
+      //older approach
+      is_far = min_dist > _radii[nearest];
+      is_boundary = boundary_gap < _matrix_thickness;
+      is_grain = !is_boundary && !is_far;
+
+      //assign value
       density_val =
         is_grain ? (_range_in[0] + rand_value * (_range_in[1] - _range_in[0]))
                   : (_range_out[0] + rand_value * (_range_out[1] - _range_out[0]));
@@ -373,22 +434,16 @@ PolycrystalDensityUO::initialSetup(){
 
   nl_sys.solution().close();
 }
-
+///kept empty on purpose
 void
 PolycrystalDensityUO::execute()
-{
-
-}
-
+{}
 void
-PolycrystalDensityUO::initialize(){
-
-}
-
+PolycrystalDensityUO::initialize()
+{}
 void 
-PolycrystalDensityUO::finalize(){
-
-}
+PolycrystalDensityUO::finalize()
+{}
 
 //standard function to read CSV data
 std::vector<std::vector<Real>>
@@ -421,6 +476,7 @@ PolycrystalDensityUO::readCSV(const std::string csv_file_name){
 
 //create a helper function to assign pore values
 //second version
+//this should also account for the assignment when loaded is used
 Real
 PolycrystalDensityUO::assignPoreValue(unsigned int grain_id,
                                       const Elem * elem,

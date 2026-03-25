@@ -28,6 +28,7 @@ ADComputeMISTERnetHeat::validParams()
   params.addParam<bool>("correction_heat", false, "correction_heat: parameter to accont for elemental volume on energy conservation");
   params.addParam<Real>("dirac_tolerance", 0., "dirac_tolerance");
   params.addParam<bool>("use_gating", true, "gating for heat and reaction sources");
+  params.addParam<bool>("use_complete_burn", false, "use_complete_burn");
   return params;
 }
 
@@ -63,7 +64,8 @@ ADComputeMISTERnetHeat::ADComputeMISTERnetHeat(const InputParameters & parameter
 
     //get the shock velocity
     _us(getADMaterialProperty<Real>("us")),
-    _use_gating(getParam<bool>("use_gating"))
+    _use_gating(getParam<bool>("use_gating")),
+    _use_complete_burn(getParam<bool>("use_complete_burn"))
 {
   const unsigned int n_v = coupledComponents("v_components");
   _v.reserve(n_v);
@@ -138,7 +140,8 @@ ADComputeMISTERnetHeat::computeQpProperties()
   }
 
   //define reaction rates for surrogate model
-  ADReal Y3_pred = condition_chem ? _fraction_csv[_qp] : 0.; //this should go to 1
+  ADReal Y3_pred_consistent = _use_complete_burn ? ADReal(1.0) : _fraction_csv[_qp];
+  ADReal Y3_pred = condition_chem ? Y3_pred_consistent : 0.; //this should go to 1 when complete burn is set
   _Y3_dot_surrogate[_qp] = _indicator_surrogate[_qp] * Y3_pred / tau_react;
 
   //apply gating
@@ -147,7 +150,14 @@ ADComputeMISTERnetHeat::computeQpProperties()
     _heatrate_mister_react[_qp] *= CosGate(tau_react, _dirac_switch_react[_qp]);
     _Y3_dot_surrogate[_qp] *= CosGate(tau_react, _dirac_switch_react[_qp]);
   }
-  _Y1_dot_surrogate[_qp] = - _Y3_dot_surrogate[_qp];
+
+  //now we have to make Y1 consistent as well
+  if (_use_complete_burn){
+    //Y1 doesn't start at 1, it starts at _fraction_csv, so we need to account for that in the rate
+    _Y1_dot_surrogate[_qp] = - _Y3_dot_surrogate[_qp] * (1. / Y3_pred_consistent) * _fraction_csv[_qp];
+  }else{
+    _Y1_dot_surrogate[_qp] = - _Y3_dot_surrogate[_qp];
+  }
 }
 
 ADReal

@@ -163,7 +163,6 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     }
   }
   
-
   //retrieve csv data for pore
   for (auto &row : _csv_total_shock_pore){
     if (row.size() < 2){
@@ -294,27 +293,28 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
       }
     }
   }
-  
-
-  //_call_condition = (_qp == 0. && _v_flag[_qp] == (0.) && condition_v > (_thr_v) && condition_a < ADReal(_thr_a)) ? true : false;
 
   if (_call_condition){ //we need V and A constraints to make sure the call happens at the actual shock velocity
     _v_flag[_qp] = 1.0; //set flag to one, call in misternet material as condition for ComputeQpProperties
     //get temperatures
     const int id_call = static_cast<int>(std::round(_density_i[_qp]));
 
-    //test: clamp velocity to values
     //here we need to branch if we are using bulk or MicroID values
 
     //declare values for binder
     Real pred_shock, pred_react, pred_time;
 
     //define cases
-  
-    const bool is_pore = (id_call >= _range_pore[0] && id_call <= _range_pore[1]);
-    const bool is_bulk = (id_call == _bulk_MicroID);
-    const bool is_binder = (!is_pore && !is_bulk);
+    //cases for when loaded_micro = false
+    bool is_pore = false;
+    bool is_bulk = false;
+    bool is_binder = false;
 
+    //standard distribution case
+    is_pore = (id_call >= _range_pore[0] && id_call <= _range_pore[1]);
+    is_bulk = (id_call == _bulk_MicroID);
+    is_binder = (!is_pore && !is_bulk);
+    
     //define call velocity explicitly
     const Real call_up = std::clamp(L2norm(v_vect).value(), (0.0), (4.89));
 

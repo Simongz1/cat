@@ -49,6 +49,11 @@ protected:
   const Real _pore_probability;
   const bool _euler_angles;
 
+  const bool _use_loaded_microstructure;
+  const FunctionName &_loaded_microstructure_name;
+  const Real _pore_limit;
+  const Real _bulk_limit;
+
   ////////////////
   std::vector<std::vector<Real>> _csv_total_fractions;
   std::vector<std::vector<Real>> _csv_total_fractions_pore;

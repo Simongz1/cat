@@ -15,6 +15,14 @@ PolycrystalFractionAux::validParams()
   params.addRequiredParam<unsigned int>("bulk_MicroID", "bulk_MicroID");
   params.addRequiredParam<Real>("bulk_RDX_fraction", "bulk_RDX_fraction");
   params.addRequiredParam<std::vector<unsigned int>>("range_pore", "range_pore");
+
+  //for using loaded microstructure
+  params.addParam<bool>("use_loaded_microstructure", false, "use_loaded_microstructure");
+  params.addCoupledVar("loaded_microstructure", "loaded_microstructure");
+
+  //for segmentation
+  params.addParam<Real>("pore_limit", 0.25, "pore_limit");
+  params.addParam<Real>("bulk_limit", 1.77, "bulk_limit");
   return params;
 }
 
@@ -27,7 +35,11 @@ PolycrystalFractionAux::PolycrystalFractionAux(const InputParameters & parameter
     //for bulk assignment
     _bulk_MicroID(getParam<unsigned int>("bulk_MicroID")),
     _bulk_RDX_fraction(getParam<Real>("bulk_RDX_fraction")),
-    _range_pore(getParam<std::vector<unsigned int>>("range_pore"))
+    _range_pore(getParam<std::vector<unsigned int>>("range_pore")),
+    _use_loaded_microstructure(getParam<bool>("use_loaded_microstructure")),
+    _loaded_microstructure(isCoupled("loaded_microstructure") ? &coupledValue("loaded_microstructure") : nullptr),
+    _pore_limit(getParam<Real>("pore_limit")),
+    _bulk_limit(getParam<Real>("bulk_limit"))
 {
     _csv_total_fraction = readCSV(_csv_fraction);
     _csv_total_fraction_pore = readCSV(_csv_fraction_pore);
@@ -39,9 +51,18 @@ PolycrystalFractionAux::computeValue()
     const std::vector<Real> first_col = _csv_total_fraction[0];
     const std::vector<Real> first_col_pore = _csv_total_fraction_pore[0];
 
-    //define cases
-    const bool is_pore = (_density_i[_qp] >= _range_pore[0] && _density_i[_qp] <= _range_pore[1]);
-    const bool is_bulk = (_density_i[_qp] == _bulk_MicroID);
+    bool is_pore = false;
+    bool is_bulk = false;
+
+    is_pore = (_density_i[_qp] >= _range_pore[0] && _density_i[_qp] <= _range_pore[1]);
+    is_bulk = (_density_i[_qp] == _bulk_MicroID);
+
+    //retrieve loaded microstructure if needed
+    //if (_use_loaded_microstructure){
+    //  //use the loaded density to define cases
+    //  is_pore = ((*_loaded_microstructure)[_qp] <= _pore_limit);
+    //  is_bulk = ((*_loaded_microstructure)[_qp] >= _bulk_limit);
+    //}
 
     //before assigning fraction values, we need to evaluate the MicroID that was assigned by the UO
     Real pred_fraction;
@@ -56,7 +77,7 @@ PolycrystalFractionAux::computeValue()
     else { //outside, microPBXs
       pred_fraction = first_col.at(_density_i[_qp]);
     }
-    return  pred_fraction;
+    return pred_fraction;
 }
 
 std::vector<std::vector<Real>>
