@@ -99,7 +99,7 @@ match pbx:
         """
     
     case 'LOADED':
-        datafile = input('DATA file name with extension: ')
+        datafile = input('DATA.txt file name without extension: ')
         if (dim == '2D'):
             zloc = float(input('Provide z location of the slice to extract: '))
         binder_range = np.array((input('Provide minimum and maximum microstructure value for binder (0, 92): ')).split(','), dtype = int)
@@ -125,7 +125,7 @@ match pbx:
             [Functions]
                 [loaded_microstructure]
                     type = PiecewiseMultilinear
-                    data_file = '{datafile}'
+                    data_file = '{datafile}.txt'
                 []  
             []
         """
@@ -154,6 +154,8 @@ complete_burn = input('Use complete burn model? (true) or (false): ')
 block_temp_unreacted = """  
     [{name}_unreacted] type = Normal mean = {mean} standard_deviation = {std_dev} []
 """
+#######
+
 #template block for reacted
 block_temp_reacted = """  
     [{name}_reacted] type = Normal mean = {mean} standard_deviation = {std_dev} []
@@ -268,7 +270,11 @@ match dim:
             
         final = final.replace("{ZMIN}", repl)
 
-final_name = f"{dim}_up{vel}_type{pbx}_perp{elem_perp_1}_shock{elem_shock_dir}_poro{particle_poro if pbx == 'PBX' else 0}_time{'distr' if use_distributions == 'true' else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}" 
+#define name for the loaded microstructures
+if (pbx == 'LOADED'):
+    final_name = f"loaded_{datafile}_slice{zloc}_{dim}_up{vel}_perp{elem_perp_1}_shock{elem_shock_dir}_time{'distr' if use_distributions == 'true' else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}" 
+else:
+    final_name = f"{dim}_up{vel}_type{pbx}_perp{elem_perp_1}_shock{elem_shock_dir}_poro{particle_poro if pbx == 'PBX' else 0}_time{'distr' if use_distributions == 'true' else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}" 
 
 with open(f'{final_name}.i', "w") as f:
     f.write(final)
@@ -299,7 +305,7 @@ if (gen_and_run == 'YES'):
 
     #paste the .txt file if required
     if (pbx == 'LOADED'):
-        su.run(['cp', f'{datafile}', f'DIR{final_name}'])
+        su.run(['cp', f'{datafile}.txt', f'DIR{final_name}'])
 
     #use sbatch template to generate actual sbatch file within this directory
     with open(f'sbatch_template', 'r') as f:
