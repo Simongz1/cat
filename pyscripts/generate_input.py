@@ -9,6 +9,7 @@ df = pd.read_csv('distributions.csv')
 #define simulation dimension
 dim = (input('Provide simulation dimension (2D) or (3D): '))
 vel = float(input('Provide impact velocity (km/s): '))
+elemsize = np.array((input('Voxel dimensions in microns for the shock and perpendicular directions: ')).split(','), dtype = float)
 
 #query PBX or random
 pbx = input('Type of microstructure to generate (PBX), (RANDOM) or (LOADED): ')
@@ -27,7 +28,7 @@ match pbx:
         use_mixture = input('Use mixture for mechanics (true) or (false): ')
         binder_properties = np.array((input('Provide binder bulk, yield, shear modulus (GPa), and poisson modulus: ')).split(','), dtype = float)
         
-        tabular_time = input('Use tabular time distribution? (true) or (false): ') #default to value
+        tabular_time = input('Use tabular time distribution? (true) or (false)') #default to value
         use_distributions = input('Use time distributions (true) or (false): ')
         use_gating = input('Use gating for heat and chemical sources (true) or (false): ')
         loaded_microstructure = str('false')
@@ -44,7 +45,6 @@ match pbx:
             []
 
         """
-
         block_variable = """
             [AuxVariables]
                 [loaded_microstructure]
@@ -53,12 +53,10 @@ match pbx:
                 []
             []
         """
-
         block_IC = """
 
         """
         
-
     case 'RANDOM':
         range_microstructures = np.array((input('Provide minimum and maximum microstructure ID: ').split(',')), dtype = int)
         particle_sizes = [50, 50] #default
@@ -72,8 +70,7 @@ match pbx:
 
         use_mixture = input('Use mixture for mechanics (true) or (false): ')
         binder_properties = np.array((input('Provide binder bulk, yield, shear modulus (GPa), and poisson modulus: ')).split(','), dtype = float)
-
-        tabular_time = input('Use tabular time distribution? (true) or (false): ') #default to value
+        tabular_time = input('Use tabular time distribution? (true) or (false)') #default to value
         use_distributions = input('Use time distributions (true) or (false): ')
         use_gating = input('Use gating for heat and chemical sources (true) or (false): ')
         loaded_microstructure = str('false')
@@ -89,7 +86,6 @@ match pbx:
                 []
             []
         """
-
         block_variable = """
             [AuxVariables]
                 [loaded_microstructure]
@@ -98,14 +94,16 @@ match pbx:
                 []
             []
         """
-
         block_IC = """
 
         """
     
     case 'LOADED':
         datafile = input('DATA file name with extension: ')
+        if (dim == '2D'):
+            zloc = float(input('Provide z location of the slice to extract: '))
         binder_range = np.array((input('Provide minimum and maximum microstructure value for binder (0, 92): ')).split(','), dtype = int)
+        range_microstructures = binder_range
         bulk_grains = str('true')
         loaded_microstructure = str('true')
 
@@ -127,11 +125,10 @@ match pbx:
             [Functions]
                 [loaded_microstructure]
                     type = PiecewiseMultilinear
-                    data_file = f'{datafile}'
+                    data_file = '{datafile}'
                 []  
             []
         """
-
         block_variable = """
             [AuxVariables]
                 [loaded_microstructure]
@@ -140,7 +137,6 @@ match pbx:
                 []
             []
         """
-
         block_IC = """
             [ICs]
                 [loaded_microstructure]
@@ -162,7 +158,6 @@ block_temp_unreacted = """
 block_temp_reacted = """  
     [{name}_reacted] type = Normal mean = {mean} standard_deviation = {std_dev} []
 """
-
 blocks_unreacted = []
 blocks_reacted = []
 
@@ -205,10 +200,8 @@ final = final.replace("{BINDER_POISSON}", str(binder_poisson))
 #replace the rest here
 final = final.replace("{BULK_GRAINS}", bulk_grains)
 final = final.replace("{USE_MIXTURE}", str(use_mixture))
-
 final = final.replace("{TABULAR_TIME}", tabular_time)
 final = final.replace("{DISTRIBUTIONS}", str(use_distributions))
-
 final = final.replace("{PARTICLE_RANGE_SMALL}", str(particle_range[0]))
 final = final.replace("{PARTICLE_RANGE_LARGE}", str(particle_range[-1]))
 final = final.replace("{BINDER_RANGE_SMALL}", str(binder_range[0]))
@@ -218,18 +211,16 @@ final = final.replace("{BIG_SIZE}", str(particle_sizes[-1]))
 final = final.replace("{BINDER_WIDTH}", str(binder_width))
 final = final.replace("{SMALL_PROPORTION}", str(particle_proportions[0]))
 final = final.replace("{BIG_PROPORTION}", str(particle_proportions[-1]))
-
 final = final.replace("{POROSITY}", str(particle_poro))
 final = final.replace("{USE_GATING}", str(use_gating))
 
 #new
-
 final = final.replace("{LOADED_MICROSTRUCTURE}", str(loaded_microstructure))
 final = final.replace("{COMPLETE_BURN}", str(complete_burn))
-
-final = final.replace("{MICROSTRUCTURE_FUNCTION}", block_function)
+final = final.replace("{MICROSTRUCTURE_FUNCTION}", block_function.format(datafile=str(datafile)))
 final = final.replace("{MICROSTRUCTURE_VARIABLE}", block_variable)
 final = final.replace("{MICROSTRUCTURE_IC}", block_IC)
+final = final.replace("{SHOCKDIR}", str(elemsize[0]))
 
 #for mesh generation
 match dim:
@@ -244,9 +235,17 @@ match dim:
         final = final.replace("{ELEM_PERP_2}", str(elem_perp_2))
         final = final.replace("{ELEM_SHOCK_DIR}", str(elem_shock_dir))
 
-        final = final.replace("{DIM_PERP_1}", str(float(1.1 * elem_perp_1)))
-        final = final.replace("{DIM_PERP_2}", str(float(1.1 * elem_perp_2)))
-        final = final.replace("{DIM_SHOCK_DIR}", str(float(1.9 * elem_shock_dir)))
+        final = final.replace("{DIM_PERP_1}", str(float(elemsize[-1] * elem_perp_1)))
+        final = final.replace("{DIM_PERP_2}", str(float(elemsize[-1] * elem_perp_2) if pbx != 'LOADED' else str(zloc + elemsize[-1])))
+        final = final.replace("{DIM_SHOCK_DIR}", str(float(elemsize[0] * elem_shock_dir)))
+        
+        #for the case wher we want a slice from a loaded 3D structure
+        if (pbx == 'LOADED' and dim == '2D'):
+            repl = str(zloc)
+        else:
+            repl = str(0)
+
+        final = final.replace("{ZMIN}", repl)
 
     case '3D':
         elem_shock_dir = int(input('Provide element count along shock direction: '))
@@ -257,9 +256,17 @@ match dim:
         final = final.replace("{ELEM_PERP_2}", str(elem_perp_2))
         final = final.replace("{ELEM_SHOCK_DIR}", str(elem_shock_dir))
 
-        final = final.replace("{DIM_PERP_1}", str(float(1.1 * elem_perp_1)))
-        final = final.replace("{DIM_PERP_2}", str(float(1.1 * elem_perp_2)))
-        final = final.replace("{DIM_SHOCK_DIR}", str(float(1.9 * elem_shock_dir)))
+        final = final.replace("{DIM_PERP_1}", str(float(elemsize[-1] * elem_perp_1)))
+        final = final.replace("{DIM_PERP_2}", str(float(elemsize[-1] * elem_perp_2)))
+        final = final.replace("{DIM_SHOCK_DIR}", str(float(elemsize[0] * elem_shock_dir)))
+
+        #for the case wher we want a slice from a loaded 3D structure
+        if (pbx == 'LOADED' and dim == '2D'):
+            repl = str(zloc)
+        else:
+            repl = str(0)
+            
+        final = final.replace("{ZMIN}", repl)
 
 final_name = f"{dim}_up{vel}_type{pbx}_perp{elem_perp_1}_shock{elem_shock_dir}_poro{particle_poro if pbx == 'PBX' else 0}_time{'distr' if use_distributions == 'true' else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}" 
 
@@ -289,6 +296,10 @@ if (gen_and_run == 'YES'):
 
     #create sbatch file inside the created directory
     su.run(['touch', f'DIR{final_name}/{final_name}'])
+
+    #paste the .txt file if required
+    if (pbx == 'LOADED'):
+        su.run(['cp', f'{datafile}', f'DIR{final_name}'])
 
     #use sbatch template to generate actual sbatch file within this directory
     with open(f'sbatch_template', 'r') as f:
@@ -335,4 +346,4 @@ with open(dump_name, 'w') as f:
     f.write(f"Use Tabular Time?: {tabular_time}\n")
     f.write(f"Use Time Distributions?: {use_distributions}\n")
     f.write(f"Use Gating for Heat and Chemical Sources?: {use_gating}\n")
-     
+#################################################################################
