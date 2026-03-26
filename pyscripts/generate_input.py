@@ -27,7 +27,7 @@ match pbx:
         use_mixture = input('Use mixture for mechanics (true) or (false): ')
         binder_properties = np.array((input('Provide binder bulk, yield, shear modulus (GPa), and poisson modulus: ')).split(','), dtype = float)
         
-        tabular_time = input('Use tabular time distribution? (true) or (false)') #default to value
+        tabular_time = input('Use tabular time distribution? (true) or (false): ') #default to value
         use_distributions = input('Use time distributions (true) or (false): ')
         use_gating = input('Use gating for heat and chemical sources (true) or (false): ')
         loaded_microstructure = str('false')
@@ -73,7 +73,7 @@ match pbx:
         use_mixture = input('Use mixture for mechanics (true) or (false): ')
         binder_properties = np.array((input('Provide binder bulk, yield, shear modulus (GPa), and poisson modulus: ')).split(','), dtype = float)
 
-        tabular_time = input('Use tabular time distribution? (true) or (false)') #default to value
+        tabular_time = input('Use tabular time distribution? (true) or (false): ') #default to value
         use_distributions = input('Use time distributions (true) or (false): ')
         use_gating = input('Use gating for heat and chemical sources (true) or (false): ')
         loaded_microstructure = str('false')
