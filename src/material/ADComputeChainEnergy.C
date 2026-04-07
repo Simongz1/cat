@@ -244,6 +244,10 @@ ADComputeChainEnergy::computeQpStress()
   _ep[_qp] = _ep_old[_qp] + delta_ep;
   _be[_qp] -= 2. / 3. * delta_ep * _be[_qp].trace() * _Np[_qp];
 
+  //declare deltaep as the increment to compute the plastic strain rate
+  
+  _ep_dot[_qp] = delta_ep / _dt; //this is assuming that the increment is given over dt
+
   //obtain inverse plastic volume preserving C tensor
 
   //compute F_bar at n+1
@@ -290,7 +294,6 @@ ADComputeChainEnergy::computeQpStress()
 
   _Ep_dot[_qp] = 0.5 * (Fp_dot.transpose() * _Fp[_qp] + _Fp[_qp].transpose() * Fp_dot);
   _Ee_dot[_qp] = 0.5 * (Fe_dot.transpose() * _Fe[_qp] + _Fe[_qp].transpose() * Fe_dot);
-  _ep_dot[_qp] = (1. / _dt) * (_ep[_qp] - _ep_old[_qp]);
 
   ///invariants for elastic energy calculation
 
