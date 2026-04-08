@@ -264,6 +264,9 @@ ADPBXStress::computeQpStress()
   _ep[_qp] = _ep_old[_qp] + delta_ep;
   _be[_qp] -= 2. / 3. * delta_ep * _be[_qp].trace() * _Np[_qp];
 
+  //compute plastic strain rate from radial return increment
+  _ep_dot[_qp] = delta_ep / _dt;
+
   ADRankTwoTensor F = _F[_qp];
   ADRankTwoTensor F_bar = MetaPhysicL::pow(J, - 1. / 3.) * F;
   
@@ -297,7 +300,6 @@ ADPBXStress::computeQpStress()
 
   _Ep_dot[_qp] = 0.5 * (Fp_dot.transpose() * _Fp[_qp] + _Fp[_qp].transpose() * Fp_dot);
   _Ee_dot[_qp] = 0.5 * (Fe_dot.transpose() * _Fe[_qp] + _Fe[_qp].transpose() * Fe_dot);
-  _ep_dot[_qp] = (1. / _dt) * (_ep[_qp] - _ep_old[_qp]);
 
   _Je[_qp] = _Fe[_qp].det();
   _Jp[_qp] = _Fp[_qp].det();

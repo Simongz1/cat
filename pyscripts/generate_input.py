@@ -28,10 +28,11 @@ match pbx:
         use_mixture = input('Use mixture for mechanics (true) or (false): ')
         binder_properties = np.array((input('Provide binder bulk, yield, shear modulus (GPa), and poisson modulus: ')).split(','), dtype = float)
         
-        tabular_time = input('Use tabular time distribution? (true) or (false)') #default to value
-        use_distributions = input('Use time distributions (true) or (false): ')
+        tabular_time = input('Use tabular time distribution? (true) or (false): ') #default to value
+        use_distributions = input('Use gaussian time distributions: (true) or (false): ')
         use_gating = input('Use gating for heat and chemical sources (true) or (false): ')
         loaded_microstructure = str('false')
+        datafile = 'a'
 
         #define block for function and variable
         block_function = """
@@ -70,11 +71,12 @@ match pbx:
 
         use_mixture = input('Use mixture for mechanics (true) or (false): ')
         binder_properties = np.array((input('Provide binder bulk, yield, shear modulus (GPa), and poisson modulus: ')).split(','), dtype = float)
-        tabular_time = input('Use tabular time distribution? (true) or (false)') #default to value
-        use_distributions = input('Use time distributions (true) or (false): ')
-        use_gating = input('Use gating for heat and chemical sources (true) or (false): ')
+        tabular_time = input('Use tabular time distribution? (true) or (false): ') #default to value
+        use_distributions = input('Use gaussian time distributions? (true) or (false): ')
+        use_gating = input('Use gating for heat and chemical sources? (true) or (false): ')
         loaded_microstructure = str('false')
-
+        datafile = 'a'
+        
         #define block for function and variable
         block_function = """
             [Functions]
@@ -117,7 +119,7 @@ match pbx:
         binder_properties = np.array((input('Provide binder bulk, yield, shear modulus (GPa), and poisson modulus: ')).split(','), dtype = float)
 
         tabular_time = input('Use tabular time distribution? (true) or (false): ') #default to value
-        use_distributions = input('Use time distributions (true) or (false): ')
+        use_distributions = input('Use gaussian time distributions: (true) or (false): ')
         use_gating = input('Use gating for heat and chemical sources (true) or (false): ')
 
         #define block for function and variable
@@ -154,8 +156,6 @@ complete_burn = input('Use complete burn model? (true) or (false): ')
 block_temp_unreacted = """  
     [{name}_unreacted] type = Normal mean = {mean} standard_deviation = {std_dev} []
 """
-#######
-
 #template block for reacted
 block_temp_reacted = """  
     [{name}_reacted] type = Normal mean = {mean} standard_deviation = {std_dev} []
@@ -318,6 +318,10 @@ if (gen_and_run == 'YES'):
     sbatch_final = sbatch_final.replace('{APP_NAME}', str(app))
     sbatch_final = sbatch_final.replace('{INPUT}', f'{final_name}')
     sbatch_final = sbatch_final.replace('{DIR}', f'DIR{final_name}')
+
+    #input queue
+    queue = str(input('Queue to submit the job (normal) or (standby): '))
+    sbatch_final = sbatch_final.replace('{QUEUE}', str(queue))
 
     with open(f'DIR{final_name}/{final_name}', 'w') as f:
         f.write(sbatch_final)
