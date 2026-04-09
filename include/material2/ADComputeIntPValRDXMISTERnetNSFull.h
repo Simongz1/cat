@@ -78,6 +78,8 @@ protected:
   Distribution const *_distribution_lower;
   Distribution const *_distribution_upper;
 
+  const Real _tau_react_scaling;
+
   /////////////////////////////////
 
   std::vector<const ADVariableValue *> _v;

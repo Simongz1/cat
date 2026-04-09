@@ -50,6 +50,7 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addRequiredCoupledVar("tracking", "tracking");
   params.addParam<bool>("use_tabular_time", false, "use_tabular_time");
   params.addParam<bool>("use_distributions", false, "use_distributions");
+  params.addParam<Real>("tau_react_scaling", 1., "tau_react_scaling");
   return params;
 }
 
@@ -103,7 +104,8 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
 
     //placeholder for distribution call
     _distribution_lower(nullptr),
-    _distribution_upper(nullptr)
+    _distribution_upper(nullptr),
+    _tau_react_scaling(getParam<Real>("tau_react_scaling"))
 { 
   /////////////////////////////////////////////////////////
   const unsigned int n_v = coupledComponents("v_components");
@@ -280,10 +282,6 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
 
   bool _call_condition = false;
 
-  //if (_qp == 0 && _v_flag[_qp] == 0. && condition_a > ADReal(_thr_a) && (condition_v - condition_a) > 0.2 && condition_a > _thr_a){
-  //    _call_condition = true; 
-  //}
-
   //to get the old behavior, use up/us and thr_a to be smaller than a value
 
   if (_qp==0){
@@ -364,7 +362,10 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
       _time_react[_qp] = time_equil(ADReal(call_up));
       _time_react[_qp] = max(_dt, min(2.0, _time_react[_qp]));
     }
-    
+
+    ///scale tau
+    _time_react[_qp] *= _tau_react_scaling;
+
     //get the temeprature at the initial qp
     _stored_shock = pred_shock;
     _stored_react = pred_react;
@@ -372,9 +373,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
     if (_use_tabular_time){
       _stored_time  = pred_time;
     }
-    //
-
-    //store the called up value
+    
     _called_up[_qp] = L2norm(v_vect);
   }
 
@@ -385,10 +384,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
     _temperature_mister_react[_qp] = _temperature_mister_react[0];
     _time_react[_qp] = _time_react[0];
     _called_up[_qp] = _called_up[0];
-  }
-
-  //_us[_qp] = 4.0790 + 1.9370 * L2norm(v_vect);
-  
+  }  
 }
 
 //interpolate between values
