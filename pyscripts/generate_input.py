@@ -224,6 +224,10 @@ final = final.replace("{MICROSTRUCTURE_VARIABLE}", block_variable)
 final = final.replace("{MICROSTRUCTURE_IC}", block_IC)
 final = final.replace("{SHOCKDIR}", str(elemsize[0]))
 
+#check for scaled time to react
+scale_tau = float(input('Scaling factor for time to homogenization. Defaults to 1: '))
+final = final.replace("{SCALING_TAU}", str(scale_tau))
+
 #for mesh generation
 match dim:
     case '2D':
