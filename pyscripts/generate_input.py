@@ -19,6 +19,8 @@ match pbx:
         particle_sizes = np.array((input('Provide desired particle sizes (microns) for a bimodal distribution: ')).split(','), dtype = float)
         particle_proportions = np.array((input('Provide fractions of small and big particle sizes: ')).split(','), dtype = float)
         particle_poro = float(input('Provide particle porosity (%): ')) / 100
+        #request RDX density
+        rdx_density = float(input('Provide bulk RDX denisty in kg/m3: '))
         binder_width = (input('Provide desired binder width (microns): '))
         binder_range = np.array((input('Provide minimum and maximum microstructure value for binder (0, 92): ')).split(','), dtype = int)
         particle_range = binder_range
@@ -67,6 +69,9 @@ match pbx:
         binder_range = range_microstructures
         particle_range = range_microstructures
 
+        #default to 1820 kg/m3 for RDX bulk density
+        rdx_density = 1820
+
         bulk_grains = str('false') #default
 
         use_mixture = input('Use mixture for mechanics (true) or (false): ')
@@ -107,6 +112,7 @@ match pbx:
         binder_range = np.array((input('Provide minimum and maximum microstructure value for binder (0, 92): ')).split(','), dtype = int)
         range_microstructures = binder_range
         bulk_grains = str('true')
+        rdx_density = float(input('Provide bulk RDX denisty in kg/m3: '))
         loaded_microstructure = str('true')
 
         particle_sizes = [50, 50] #default
@@ -223,6 +229,9 @@ final = final.replace("{MICROSTRUCTURE_FUNCTION}", block_function.format(datafil
 final = final.replace("{MICROSTRUCTURE_VARIABLE}", block_variable)
 final = final.replace("{MICROSTRUCTURE_IC}", block_IC)
 final = final.replace("{SHOCKDIR}", str(elemsize[0]))
+
+#bulk RDX density
+final = final.replace("{BULK_DENSITY}", str(rdx_density))
 
 #check for scaled time to react
 scale_tau = float(input('Scaling factor for time to homogenization. Defaults to 1: '))
