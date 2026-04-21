@@ -53,7 +53,7 @@ ADComputeMixturePressure::ADComputeMixturePressure(const InputParameters &params
             p_den = (gamma2 - 1) * alpha1 + (gamma1 - 1) * (1 - alpha1);
 
             //define the output
-            return p_num / p_den;
+            return (p_num / p_den);
         }
     );
 }

@@ -37,33 +37,33 @@ ADComputeTemperature::ADComputeTemperature(const InputParameters &params)
 
     //recycle this object to declare rho * u
 
-    addFunctorProperty<ADReal>(
-        getParam<MooseFunctorName>("specific_internal_energy"),
-        [this](const auto & r, const auto & state) -> ADReal{
-            const ADReal energy = _energy(r, state);
-            const ADReal density = _density(r, state);
-
-            const ADReal mx = _mx(r, state);
-            const ADReal my = _my(r, state);
-            const ADReal mz = _mz(r, state);
-
-            //define vector valued u for easy index operation
-            ADRealVectorValue m;
-            m(0) = mx;
-            m(1) = my;
-            m(2) = mz;
-
-            //compute specific internal energy
-            ADReal sp_int_e;
-            sp_int_e = energy;
-            for (unsigned int i = 0; i < 3; ++i){
-                sp_int_e -= (density / 2.) * (m(i) / density) * (m(i) / density);
-            }
-            sp_int_e *= 1. / density;
-
-            return sp_int_e;
-        }
-    );
+    //addFunctorProperty<ADReal>(
+    //    getParam<MooseFunctorName>("specific_internal_energy"),
+    //    [this](const auto & r, const auto & state) -> ADReal{
+    //        const ADReal energy = _energy(r, state);
+    //        const ADReal density = _density(r, state);
+//
+    //        const ADReal mx = _mx(r, state);
+    //        const ADReal my = _my(r, state);
+    //        const ADReal mz = _mz(r, state);
+//
+    //        //define vector valued u for easy index operation
+    //        ADRealVectorValue m;
+    //        m(0) = mx;
+    //        m(1) = my;
+    //        m(2) = mz;
+//
+    //        //compute specific internal energy
+    //        ADReal sp_int_e;
+    //        sp_int_e = energy;
+    //        for (unsigned int i = 0; i < 3; ++i){
+    //            sp_int_e -= (density / 2.) * (m(i) / density) * (m(i) / density);
+    //        }
+    //        sp_int_e *= 1. / density;
+//
+    //        return sp_int_e;
+    //    }
+    //);
 
     addFunctorProperty<ADReal>(
         getParam<MooseFunctorName>("temperature"),
