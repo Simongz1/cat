@@ -270,7 +270,7 @@ ADPBXStress::computeQpStress()
   ADRankTwoTensor F = _F[_qp];
   ADRankTwoTensor F_bar = MetaPhysicL::pow(J, - 1. / 3.) * F;
   
-  _inv_Cp[_qp] = F_bar.inverse() * _be[_qp] *F_bar.inverse().transpose();
+  _inv_Cp[_qp] = F_bar.inverse() * _be[_qp] * F_bar.inverse().transpose();
   _Cp[_qp] = _inv_Cp[_qp].inverse();
 
   //get plastic deformation gradient 
