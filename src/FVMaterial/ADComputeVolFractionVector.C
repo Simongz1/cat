@@ -29,7 +29,7 @@ ADComputeVolFractionVector::ADComputeVolFractionVector(const InputParameters &pa
       _mx(getFunctor<ADReal>("mx")),
       _my(getFunctor<ADReal>("my")),
       _mz(getFunctor<ADReal>("mz")),
-      _alpha1(getFunctor<ADReal>("alpah1"))
+      _alpha1(getFunctor<ADReal>("alpha1"))
 {
 
     //recycle this object to declare rho * u
