@@ -13,5 +13,4 @@ protected:
     const Moose::Functor<ADReal> &_mx;
     const Moose::Functor<ADReal> &_my;
     const Moose::Functor<ADReal> &_mz;
-    const Moose::Functor<ADReal> &_pressure;
 };
