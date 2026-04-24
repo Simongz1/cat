@@ -14,5 +14,4 @@ protected:
     const Moose::Functor<ADReal> &_pi1;
     const Moose::Functor<ADReal> &_pi2;
     const Moose::Functor<ADReal> &_alpha1;
-    const Moose::Functor<ADReal> &_art_vis;
 };

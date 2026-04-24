@@ -19,7 +19,6 @@ ADComputeFunctorTensor::validParams(){
     params.addRequiredParam<MooseFunctorName>("my", "my momentum component");
     params.addRequiredParam<MooseFunctorName>("mz", "mz momentum component");
     params.addRequiredParam<MooseFunctorName>("flux_name", "name of flux vector to generate");
-    params.addRequiredParam<MooseFunctorName>("pressure", "name of pressure variable");
     return params;
 }
 
@@ -31,8 +30,7 @@ ADComputeFunctorTensor::ADComputeFunctorTensor(const InputParameters &params)
       //get momentum components
       _mx(getFunctor<ADReal>("mx")),
       _my(getFunctor<ADReal>("my")),
-      _mz(getFunctor<ADReal>("mz")),
-      _pressure(getFunctor<ADReal>("pressure"))
+      _mz(getFunctor<ADReal>("mz"))
 {
 
     addFunctorProperty<ADRealVectorValue>(
@@ -44,7 +42,6 @@ ADComputeFunctorTensor::ADComputeFunctorTensor(const InputParameters &params)
             const ADReal mx = _mx(r, state);
             const ADReal my = _my(r, state);
             const ADReal mz = _mz(r, state);
-            const ADReal p = _pressure(r, state);
 
             //define vector valued m for easy index operation
             ADRealVectorValue m;
@@ -58,7 +55,7 @@ ADComputeFunctorTensor::ADComputeFunctorTensor(const InputParameters &params)
 
             //move through indexes with i fixed as the provided component
             for (unsigned int j = 0; j < 3; ++j){
-                outer(j) = (1. / density) * m(_component) * m(j) + p * (_component == j ? 1. : 0.);
+                outer(j) = (1. / density) * m(_component) * m(j);
             }
             return outer;
         }

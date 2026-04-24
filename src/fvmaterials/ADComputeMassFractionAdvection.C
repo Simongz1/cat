@@ -52,7 +52,7 @@ ADComputeMassFractionAdvection::ADComputeMassFractionAdvection(const InputParame
             m(2) = mz;
 
             //define the output
-            return z1 * m / density;
+            return z1 * m; //conservative form enforced
         }
     );
 }

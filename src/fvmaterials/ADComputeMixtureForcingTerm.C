@@ -49,7 +49,7 @@ ADComputeMixtureForcingTerm::ADComputeMixtureForcingTerm(const InputParameters &
             rho2 = (rho_mix - alpha1 * rho1) / (1 - alpha1);
 
             ADReal num;
-            num =  rho2 * c2 * c2;
+            num =  alpha1 * rho2 * c2 * c2;
 
             ADReal den;
             den = alpha1 * rho2 * c2 * c2;

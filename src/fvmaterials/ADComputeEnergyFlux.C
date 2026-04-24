@@ -44,7 +44,7 @@ ADComputeEnergyFlux::ADComputeEnergyFlux(const InputParameters &params)
 
             const ADReal mx = _mx(r, state);
             const ADReal my = _my(r, state);
-            const ADReal mz = _mz(r, state);
+            const ADReal mz = _mz(r, state);    
 
             //define vector valued u for easy index operation
             ADRealVectorValue m;
@@ -55,11 +55,11 @@ ADComputeEnergyFlux::ADComputeEnergyFlux(const InputParameters &params)
             //compute the energy flux vector
             ADRealVectorValue eflux;
             for (unsigned int j = 0; j < 3; ++j){
-                eflux(j) = (energy + pressure) / density;
-                eflux(j) *= m(j);
+                eflux(j) = (energy + pressure) * m(j) / density;
             }
 
             return eflux;
+            //
         }
     );
 }

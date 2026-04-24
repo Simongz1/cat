@@ -18,7 +18,6 @@ ADComputeMixturePressure::validParams(){
     params.addRequiredParam<MooseFunctorName>("pi1", "name of the pi1 variable");
     params.addRequiredParam<MooseFunctorName>("pi2", "name of the pi2 variable");
     params.addRequiredParam<MooseFunctorName>("alpha1", "name of the alpha1 variable");
-    params.addRequiredParam<MooseFunctorName>("artificial_viscosity", "name of the artificial viscosity variable");
     params.addRequiredParam<MooseFunctorName>("mixture_pressure_name", "name of the mixture pressure variable");
     return params;
 }
@@ -30,8 +29,7 @@ ADComputeMixturePressure::ADComputeMixturePressure(const InputParameters &params
       _gamma2(getFunctor<ADReal>("gamma2")),
       _pi1(getFunctor<ADReal>("pi1")),
       _pi2(getFunctor<ADReal>("pi2")),
-      _alpha1(getFunctor<ADReal>("alpha1")),
-      _art_vis(getFunctor<ADReal>("artificial_viscosity"))
+      _alpha1(getFunctor<ADReal>("alpha1"))
 {
 
     addFunctorProperty<ADReal>(
@@ -45,7 +43,6 @@ ADComputeMixturePressure::ADComputeMixturePressure(const InputParameters &params
             const ADReal pi1 = _pi1(r, state);
             const ADReal pi2 = _pi2(r, state);
             const ADReal alpha1 = _alpha1(r, state);
-            const ADReal art_vis = _art_vis(r, state);
 
             ADReal p_num;
             p_num = (gamma1 - 1) * (gamma2 - 1) * sie_mix;
