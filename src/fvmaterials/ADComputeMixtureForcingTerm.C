@@ -15,6 +15,7 @@ ADComputeMixtureForcingTerm::validParams(){
     params.addRequiredParam<MooseFunctorName>("alpha1", "name of the specific internal energy of the mixture");
     params.addRequiredParam<MooseFunctorName>("rho_mix", "mixture denisty name");
     params.addRequiredParam<MooseFunctorName>("rho1", "name of the rho1 variable");
+    params.addRequiredParam<MooseFunctorName>("rho2", "name of the rho2 variable");
     params.addRequiredParam<MooseFunctorName>("c1", "name of the c1 variable");
     params.addRequiredParam<MooseFunctorName>("c2", "name of the c2 variable");
     params.addRequiredParam<MooseFunctorName>("mix_momentum_vector", "name of the mixture momentum vector");
@@ -27,6 +28,7 @@ ADComputeMixtureForcingTerm::ADComputeMixtureForcingTerm(const InputParameters &
       _alpha1(getFunctor<ADReal>("alpha1")),
       _rho_mix(getFunctor<ADReal>("rho_mix")),
       _rho1(getFunctor<ADReal>("rho1")),
+      _rho2(getFunctor<ADReal>("rho2")),
       _c1(getFunctor<ADReal>("c1")),
       _c2(getFunctor<ADReal>("c2")),
       _m_mix(getFunctor<ADRealVectorValue>("mix_momentum_vector"))
@@ -40,14 +42,12 @@ ADComputeMixtureForcingTerm::ADComputeMixtureForcingTerm(const InputParameters &
             const ADReal alpha1 = _alpha1(r, state);
             const ADReal rho_mix = _rho_mix(r, state);
             const ADReal rho1 = _rho1(r, state);
+            const ADReal rho2 = _rho2(r, state);
             const ADReal c1 = _c1(r, state);
             const ADReal c2 = _c2(r, state);
             const ADRealVectorValue m_mix = _m_mix(r, state);
 
-            //compute second phase density
-            ADReal rho2;
-            rho2 = (rho_mix - alpha1 * rho1) / (1 - alpha1);
-
+            //form numerator and denominator expressions
             ADReal num;
             num =  alpha1 * rho2 * c2 * c2;
 
