@@ -5,6 +5,7 @@ Fork "ml" to create a new MOOSE-based application.
 
 For more information see: [https://mooseframework.inl.gov/getting_started/new_users.html#create-an-app](https://mooseframework.inl.gov/getting_started/new_users.html#create-an-app)
 
+Code developed and maintained by [Simon Gonzalez](mailto:gonz1075@purdue.edu)
 -------------------------------
 
 The Microstructure-Aware Reactive Lagrangian INtegrated Shock Code (MARLINS Code) is a MOOSE-based application that provides a series of tools to peform shock response analysis for generated or imported PBX microstructures using a Lagrangian approach with stabilized shock tracking, kinetics models, equation of state models for reactants and products, melting, and thermal transport.
