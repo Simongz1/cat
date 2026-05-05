@@ -445,7 +445,7 @@ nu = 0.24
     material_property_names = 'norm_gradT thermal_conductivity'
     expression = 'thermal_conductivity * (1 + 5e-1*norm_gradT)'
     property_name = 'D'
-    outputs = exodus
+    
   []
   ########DEFINE EQUATIONS OF STATE HERE
   [dPdT]
@@ -457,7 +457,7 @@ nu = 0.24
     constant_names = 'omega_unreacted omega_reacted'
     constant_expressions = '0.37 0.77' #keep constant for now
     property_name = dPdT
-    outputs = exodus
+    
   []
   
   [q_plastic]
@@ -465,7 +465,7 @@ nu = 0.24
     beta_p = 0.5
     dirac_switch_react = dirac_switch_react
     thr_activation = 1
-    outputs = exodus
+    
   []
   [q_elastic]
     type = ADComputeElasticWorkHeating
@@ -473,7 +473,7 @@ nu = 0.24
     beta_av = 0.5
     dirac_switch_react = dirac_switch_react
     thr_activation = 1
-    outputs = exodus
+    
   []
 
   #materials for switches
@@ -509,7 +509,6 @@ nu = 0.24
   [compute_strain_plate]
     type = ADComputeFiniteStrain
     displacements = 'disp_x disp_y disp_z'
-    outputs = exodus
   []
 
   [yield_mixture]
@@ -522,7 +521,6 @@ nu = 0.24
     property_name = yield_mixture
     coupled_variables = 'temperature fraction_csv'
     compute = false
-    outputs = exodus
   []
   
   [./ComputeYdots]
@@ -551,7 +549,6 @@ nu = 0.24
     use_lump = true
     dynamic_tau = true
     thr_activation_rates = 0
-    outputs = exodus
   [../]
 
   [compute_stress_plate]
@@ -578,7 +575,7 @@ nu = 0.24
     omega_reacted = 0.77
 
     temperature = temperature
-    outputs = exodus
+    {OUTPUTS}
   []
   [compute_misternet_heat]
     type = ADComputeMISTERnetHeat
@@ -594,7 +591,7 @@ nu = 0.24
     ##for velocity and acceleration thresholds
     v_components = 'vx vy vz'
     a_components = 'ax ay az'
-    outputs = exodus
+    {OUTPUTS}
   []
   [pressureval]
     type = ADComputeIntPValRDXMISTERnetNSFull
@@ -619,7 +616,7 @@ nu = 0.24
     #############
     csv_unreacted = 'unreacted.csv'
     csv_reacted = 'reacted.csv'
-    outputs = exodus
+    {OUTPUTS}
   []
 []
 
@@ -635,7 +632,7 @@ nu = 0.24
 
     ##testing bulk grains
   
-    bulk_RDX_density = 2000 #provided in g/cm³
+    bulk_RDX_density = {BULK_DENSITY} #provided in g/cm³
   []
   [readVoronoiRDXFraction]
     type = PolycrystalFractionAux
@@ -752,5 +749,8 @@ nu = 0.24
 [Outputs]
   exodus = true
   time_step_interval = 20
+  [./mycheckpoints]
+    type = Checkpoint
+    wall_time_interval = {{FREC}}
+  []
 []
-

@@ -10,6 +10,8 @@ df = pd.read_csv('distributions.csv')
 dim = (input('Provide simulation dimension (2D) or (3D): '))
 vel = float(input('Provide impact velocity (km/s): '))
 elemsize = np.array((input('Voxel dimensions in microns for the shock and perpendicular directions: ')).split(','), dtype = float)
+check_frec = int(input('Generate checkpoints every (s): '))
+full_outputs = input('Output all fields? (YES) or (NO): ')
 
 #query PBX or random
 pbx = input('Type of microstructure to generate (PBX), (RANDOM) or (LOADED): ')
@@ -229,6 +231,8 @@ final = final.replace("{MICROSTRUCTURE_FUNCTION}", block_function.format(datafil
 final = final.replace("{MICROSTRUCTURE_VARIABLE}", block_variable)
 final = final.replace("{MICROSTRUCTURE_IC}", block_IC)
 final = final.replace("{SHOCKDIR}", str(elemsize[0]))
+final = final.replace("{{FREC}}", str(check_frec))
+final = final.replace("{OUTPUTS}", str(full_outputs) if full_outputs == 'YES' else str('#nothing'))
 
 #bulk RDX density
 final = final.replace("{BULK_DENSITY}", str(rdx_density))
@@ -299,6 +303,7 @@ gen_and_run = input('Generate sbatch script and submit? (YES) or (NO): ')
 
 if (gen_and_run == 'YES'):
     nodes, cores, days, hours, app = input('Provide nodes, cores, days, hours, and app name: ').split(',')
+    account = input('Provide account to submit job: ')
     #generate a new dir for every run
     su.run(['mkdir', f'DIR{final_name}'])
 
@@ -331,6 +336,8 @@ if (gen_and_run == 'YES'):
     sbatch_final = sbatch_final.replace('{APP_NAME}', str(app))
     sbatch_final = sbatch_final.replace('{INPUT}', f'{final_name}')
     sbatch_final = sbatch_final.replace('{DIR}', f'DIR{final_name}')
+    sbatch_final = sbatch_final.replace('{ACC}', str(account))
+    #sbatch_final = sbatch_final.replace('{FULL_OUTPUTS}', str('outputs = exodus') if full_outputs == 'YES' else str(''))
 
     #input queue
     queue = str(input('Queue to submit the job (normal) or (standby): '))
