@@ -20,6 +20,7 @@ ADComputeFunctorTensor::validParams(){
     params.addRequiredParam<MooseFunctorName>("mz", "mz momentum component");
     params.addRequiredParam<MooseFunctorName>("flux_name", "name of flux vector to generate");
     params.addParam<Real>("scalar_sign", 1., "sign scalar for switching from positive to negative vector definition");
+    params.addParam<Real>("density_limit",1e-11,"minimum density value");
     return params;
 }
 
@@ -32,7 +33,8 @@ ADComputeFunctorTensor::ADComputeFunctorTensor(const InputParameters &params)
       _mx(getFunctor<ADReal>("mx")),
       _my(getFunctor<ADReal>("my")),
       _mz(getFunctor<ADReal>("mz")),
-      _sign(getParam<Real>("scalar_sign"))
+      _sign(getParam<Real>("scalar_sign")),
+      _rho0(getParam<Real>("density_limit"))
 {
 
     addFunctorProperty<ADRealVectorValue>(
@@ -40,7 +42,7 @@ ADComputeFunctorTensor::ADComputeFunctorTensor(const InputParameters &params)
         [this](const auto & r, const auto & state) -> ADRealVectorValue{
 
             //store values at actual locations
-            const ADReal density = _density(r, state);
+            const ADReal density = MetaPhysicL::max(_density(r, state), _rho0);
             const ADReal mx = _mx(r, state);
             const ADReal my = _my(r, state);
             const ADReal mz = _mz(r, state);

@@ -14,4 +14,5 @@ protected:
     const Moose::Functor<ADReal> &_my;
     const Moose::Functor<ADReal> &_mz;
     const Real _sign;
+    const Real _rho0;
 };

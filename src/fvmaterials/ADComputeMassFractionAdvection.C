@@ -18,6 +18,7 @@ ADComputeMassFractionAdvection::validParams(){
     params.addRequiredParam<MooseFunctorName>("mz", "z component of momentum");
     params.addRequiredParam<MooseFunctorName>("z1rho1", "mass fraction of (assumed) solid phase");
     params.addRequiredParam<MooseFunctorName>("mass_fraction_name", "name of the mass fraction advection vector field");
+    params.addParam<Real>("density_limit",1e-11,"minimum density value");
     return params;
 }
 
@@ -29,7 +30,8 @@ ADComputeMassFractionAdvection::ADComputeMassFractionAdvection(const InputParame
       _mx(getFunctor<ADReal>("mx")),
       _my(getFunctor<ADReal>("my")),
       _mz(getFunctor<ADReal>("mz")),
-      _z1(getFunctor<ADReal>("z1rho1"))
+      _z1(getFunctor<ADReal>("z1rho1")),
+      _rho0(getParam<Real>("density_limit"))
 {
 
     //recycle this object to declare rho * u
@@ -39,7 +41,7 @@ ADComputeMassFractionAdvection::ADComputeMassFractionAdvection(const InputParame
         [this](const auto & r, const auto & state) -> ADRealVectorValue{
 
             //forward declare the required quantities
-            const ADReal density = _density(r, state);
+            const ADReal density = MetaPhysicL::max(_density(r, state), _rho0);
             const ADReal mx = _mx(r, state);
             const ADReal my = _my(r, state);
             const ADReal mz = _mz(r, state);

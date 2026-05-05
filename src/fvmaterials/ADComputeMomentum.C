@@ -12,7 +12,6 @@ ADComputeMomentum::validParams(){
 
     params.addClassDescription("computes the tensor u_i u_j - sigma_ij and exposses it as a functor to be used by the FV interface");
 
-    params.addRequiredParam<MooseFunctorName>("density", "name of the density variable");
     params.addRequiredParam<unsigned int>("component", "velocity component for which this is meant to be used");
     params.addRequiredParam<MooseFunctorName>("mx", "x component of momentum");
     params.addRequiredParam<MooseFunctorName>("my", "y component of momentum");
@@ -23,7 +22,7 @@ ADComputeMomentum::validParams(){
 
 ADComputeMomentum::ADComputeMomentum(const InputParameters &params)
     : FunctorMaterial(params),
-      _density(getFunctor<ADReal>("density")),
+
       _component(getParam<unsigned int>("component")),
 
       //get velocity components
@@ -39,7 +38,6 @@ ADComputeMomentum::ADComputeMomentum(const InputParameters &params)
         [this](const auto & r, const auto & state) -> ADRealVectorValue{
 
             //forward declare the required quantities
-            const ADReal density = _density(r, state);
             const ADReal mx = _mx(r, state);
             const ADReal my = _my(r, state);
             const ADReal mz = _mz(r, state);

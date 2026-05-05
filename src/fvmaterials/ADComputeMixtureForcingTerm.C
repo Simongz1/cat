@@ -20,6 +20,7 @@ ADComputeMixtureForcingTerm::validParams(){
     params.addRequiredParam<MooseFunctorName>("c2", "name of the c2 variable");
     params.addRequiredParam<MooseFunctorName>("mix_momentum_vector", "name of the mixture momentum vector");
     params.addRequiredParam<MooseFunctorName>("mixture_forcing_term_name", "name of the mixture forcing term");
+    params.addParam<Real>("density_limit",1e-11,"minimum density value");
     return params;
 }
 
@@ -31,7 +32,8 @@ ADComputeMixtureForcingTerm::ADComputeMixtureForcingTerm(const InputParameters &
       _rho2(getFunctor<ADReal>("rho2")),
       _c1(getFunctor<ADReal>("c1")),
       _c2(getFunctor<ADReal>("c2")),
-      _m_mix(getFunctor<ADRealVectorValue>("mix_momentum_vector"))
+      _m_mix(getFunctor<ADRealVectorValue>("mix_momentum_vector")),
+      _rho0(getParam<Real>("density_limit"))
 {
 
     addFunctorProperty<ADRealVectorValue>(
@@ -40,9 +42,9 @@ ADComputeMixtureForcingTerm::ADComputeMixtureForcingTerm(const InputParameters &
 
             //forward declare the required quantities
             const ADReal alpha1 = _alpha1(r, state);
-            const ADReal rho_mix = _rho_mix(r, state);
-            const ADReal rho1 = _rho1(r, state);
-            const ADReal rho2 = _rho2(r, state);
+            const ADReal rho_mix = MetaPhysicL::max(_rho_mix(r, state), _rho0);
+            const ADReal rho1 = MetaPhysicL::max(_rho1(r, state), _rho0);
+            const ADReal rho2 = MetaPhysicL::max(_rho2(r, state), _rho0);
             const ADReal c1 = _c1(r, state);
             const ADReal c2 = _c2(r, state);
             const ADRealVectorValue m_mix = _m_mix(r, state);

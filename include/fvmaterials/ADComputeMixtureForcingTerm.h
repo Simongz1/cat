@@ -15,4 +15,5 @@ protected:
     const Moose::Functor<ADReal> &_c1;
     const Moose::Functor<ADReal> &_c2;
     const Moose::Functor<ADRealVectorValue> &_m_mix;
+    const Real _rho0;
 };

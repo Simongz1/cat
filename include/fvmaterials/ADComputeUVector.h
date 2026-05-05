@@ -11,4 +11,5 @@ protected:
     const Moose::Functor<ADReal> &_density;
     const Moose::Functor<ADRealVectorValue> &_m_vector;
     const Real _sign;
+    const Real _rho0;
 };

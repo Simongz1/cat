@@ -8,7 +8,6 @@ public:
     static InputParameters validParams();
     ADComputeMomentum(const InputParameters & params);
 protected:
-    const Moose::Functor<ADReal> &_density;
     const unsigned int _component;
     const Moose::Functor<ADReal> &_mx;
     const Moose::Functor<ADReal> &_my;

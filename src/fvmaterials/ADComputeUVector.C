@@ -18,6 +18,7 @@ ADComputeUVector::validParams(){
 
     //add a sign parameter to switch from positive to negative
     params.addParam<Real>("scalar_sign", 1., "sign scalar for switching from positive to negative vector definition");
+    params.addParam<Real>("density_limit",1e-11,"minimum density value");
     return params;
 }
 
@@ -25,7 +26,8 @@ ADComputeUVector::ADComputeUVector(const InputParameters &params)
     : FunctorMaterial(params),
       _density(getFunctor<ADReal>("density")),
       _m_vector(getFunctor<ADRealVectorValue>("m_vector")),
-      _sign(getParam<Real>("scalar_sign"))
+      _sign(getParam<Real>("scalar_sign")),
+      _rho0(getParam<Real>("density_limit"))
 {
 
     addFunctorProperty<ADRealVectorValue>(
@@ -33,7 +35,7 @@ ADComputeUVector::ADComputeUVector(const InputParameters &params)
         [this](const auto & r, const auto & state) -> ADRealVectorValue{
 
             //forward declare the required quantities
-            const ADReal density = _density(r, state);
+            const ADReal density = MetaPhysicL::max(_density(r, state), _rho0);
             const ADRealVectorValue m_vector = _m_vector(r, state);
             const Real sign = _sign;
 

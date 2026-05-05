@@ -18,6 +18,8 @@ ADComputeEnergyFlux::validParams(){
     params.addRequiredParam<MooseFunctorName>("mz", "z component of momentum");
     params.addRequiredParam<MooseFunctorName>("pressure", "name of the pressure functor");
     params.addRequiredParam<MooseFunctorName>("energy_flux_name", "name of the energy flux vector");
+    //add a density limiter
+    params.addParam<Real>("density_limit",1e-11,"density limiter value");
     return params;
 }
 
@@ -30,7 +32,8 @@ ADComputeEnergyFlux::ADComputeEnergyFlux(const InputParameters &params)
       _mx(getFunctor<ADReal>("mx")),
       _my(getFunctor<ADReal>("my")),
       _mz(getFunctor<ADReal>("mz")),
-      _pressure(getFunctor<ADReal>("pressure"))
+      _pressure(getFunctor<ADReal>("pressure")),
+      _rho0(getParam<Real>("density_limit"))
 {
 
     //recycle this object to declare rho * u
@@ -39,7 +42,7 @@ ADComputeEnergyFlux::ADComputeEnergyFlux(const InputParameters &params)
         getParam<MooseFunctorName>("energy_flux_name"),
         [this](const auto & r, const auto & state) -> ADRealVectorValue{
             const ADReal energy = _energy(r, state);
-            const ADReal density = _density(r, state);
+            const ADReal density = MetaPhysicL::max(_density(r, state), ADReal(_rho0));
             const ADReal pressure = _pressure(r, state);
 
             const ADReal mx = _mx(r, state);

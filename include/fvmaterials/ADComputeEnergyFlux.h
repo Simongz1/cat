@@ -16,4 +16,5 @@ protected:
     const Moose::Functor<ADReal> &_mz;
 
     const Moose::Functor<ADReal> &_pressure;
+    const Real _rho0;
 };
