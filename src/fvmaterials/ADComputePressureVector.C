@@ -14,13 +14,16 @@ ADComputePressureVector::validParams(){
     params.addRequiredParam<MooseFunctorName>("pressure", "name of the pressure functor");
     params.addRequiredParam<unsigned int>("component", "component for gradient evaluation");
     params.addRequiredParam<MooseFunctorName>("pressure_vector_name", "name of the pressure time basis vector");
+    //add a sign parameter to switch from positive to negative
+    params.addParam<Real>("scalar_sign", 1., "sign scalar for switching from positive to negative vector definition");
     return params;
 }
 
 ADComputePressureVector::ADComputePressureVector(const InputParameters &params)
     : FunctorMaterial(params),
       _pressure(getFunctor<ADReal>("pressure")),
-      _component(getParam<unsigned int>("component"))
+      _component(getParam<unsigned int>("component")),
+      _sign(getParam<Real>("scalar_sign"))
 {
 
     //recycle this object to declare rho * u
@@ -30,14 +33,15 @@ ADComputePressureVector::ADComputePressureVector(const InputParameters &params)
         [this](const auto & r, const auto & state) -> ADRealVectorValue{
             const ADReal pressure = _pressure(r, state);
             const unsigned int component = _component;
+            const Real sign = _sign;
             
             //return based on component
             if (_component == 0){
-                return {pressure, 0, 0};
+                return {sign * pressure, 0, 0};
             }else if (_component == 1){
-                return {0, pressure, 0};
+                return {0, sign * pressure, 0};
             }else{
-                return {0, 0, pressure};
+                return {0, 0, sign * pressure};
             }
         }
     );

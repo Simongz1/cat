@@ -12,4 +12,5 @@ protected:
 
     const Moose::Functor<ADReal> &_pressure;
     const unsigned int _component;
+    const Real _sign;
 };

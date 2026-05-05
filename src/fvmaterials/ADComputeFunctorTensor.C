@@ -19,6 +19,7 @@ ADComputeFunctorTensor::validParams(){
     params.addRequiredParam<MooseFunctorName>("my", "my momentum component");
     params.addRequiredParam<MooseFunctorName>("mz", "mz momentum component");
     params.addRequiredParam<MooseFunctorName>("flux_name", "name of flux vector to generate");
+    params.addParam<Real>("scalar_sign", 1., "sign scalar for switching from positive to negative vector definition");
     return params;
 }
 
@@ -30,7 +31,8 @@ ADComputeFunctorTensor::ADComputeFunctorTensor(const InputParameters &params)
       //get momentum components
       _mx(getFunctor<ADReal>("mx")),
       _my(getFunctor<ADReal>("my")),
-      _mz(getFunctor<ADReal>("mz"))
+      _mz(getFunctor<ADReal>("mz")),
+      _sign(getParam<Real>("scalar_sign"))
 {
 
     addFunctorProperty<ADRealVectorValue>(
@@ -42,6 +44,7 @@ ADComputeFunctorTensor::ADComputeFunctorTensor(const InputParameters &params)
             const ADReal mx = _mx(r, state);
             const ADReal my = _my(r, state);
             const ADReal mz = _mz(r, state);
+            const Real sign = _sign;
 
             //define vector valued m for easy index operation
             ADRealVectorValue m;
@@ -57,7 +60,7 @@ ADComputeFunctorTensor::ADComputeFunctorTensor(const InputParameters &params)
             for (unsigned int j = 0; j < 3; ++j){
                 outer(j) = (1. / density) * m(_component) * m(j);
             }
-            return outer;
+            return sign * outer;
         }
     );
 }
