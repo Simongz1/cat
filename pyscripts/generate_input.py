@@ -241,18 +241,24 @@ final = final.replace("{BULK_DENSITY}", str(rdx_density))
 scale_tau = float(input('Scaling factor for time to homogenization. Defaults to 1: '))
 final = final.replace("{SCALING_TAU}", str(scale_tau))
 
-#query for us-up coefficients for polynomial
-coefficients = np.array(input('Provide coefficients for the polynomial us-up relation from high to low degree: ').split(','), dtype = float)
+#query custom us-up relation
+use_custom_usup = input('Use custo us-up coefficients? will defaul to a 3rd degree polynomial (YES) or (NO): ')
 
-##form the string for us-up relation
-string_us_up = ""
-#add the rest
-for i in range(len(coefficients)):
-    string_us_up += f"{coefficients[i]}, "
+if (use_custom_usup == 'YES'):
+    #query for us-up coefficients for polynomial
+    coefficients = np.array(input('Provide coefficients for the polynomial us-up relation from high to low degree: ').split(','), dtype = float)
+    ##form the string for us-up relation
+    string_us_up = ""
+    #add the rest
+    for i in range(len(coefficients)):
+        string_us_up += f"{coefficients[i]} "
+    string_us_up = string_us_up[:-2]
 
-string_us_up = string_us_up[:-2]
+final = final.replace("{USUP_COEFFS}", str(f"us_up_coeffs = '{string_us_up}'") if use_custom_usup == 'YES' else str('#defaultusup'))
 
-final = final.replace("{USUP_COEFFS}", str(f"us_up_coeffs = '{string_us_up}'"))
+#query compression sign
+compression_sign = int(input('Provide sign of positive compression (1) or (-1): '))
+final = final.replace("{COMPRESSION_SIGN}", str(compression_sign))
 
 #for mesh generation
 match dim:
