@@ -232,7 +232,7 @@ final = final.replace("{MICROSTRUCTURE_VARIABLE}", block_variable)
 final = final.replace("{MICROSTRUCTURE_IC}", block_IC)
 final = final.replace("{SHOCKDIR}", str(elemsize[0]))
 final = final.replace("{{FREC}}", str(check_frec))
-final = final.replace("{OUTPUTS}", str(full_outputs) if full_outputs == 'YES' else str('#nothing'))
+final = final.replace("{OUTPUTS}", str('outputs = exodus') if full_outputs == 'YES' else str('#nothing'))
 
 #bulk RDX density
 final = final.replace("{BULK_DENSITY}", str(rdx_density))
@@ -240,6 +240,19 @@ final = final.replace("{BULK_DENSITY}", str(rdx_density))
 #check for scaled time to react
 scale_tau = float(input('Scaling factor for time to homogenization. Defaults to 1: '))
 final = final.replace("{SCALING_TAU}", str(scale_tau))
+
+#query for us-up coefficients for polynomial
+coefficients = np.array(input('Provide coefficients for the polynomial us-up relation from high to low degree: ').split(','), dtype = float)
+
+##form the string for us-up relation
+string_us_up = ""
+#add the rest
+for i in range(len(coefficients)):
+    string_us_up += f"{coefficients[i]}, "
+
+string_us_up = string_us_up[:-2]
+
+final = final.replace("{USUP_COEFFS}", str(f"us_up_coeffs = '{string_us_up}'"))
 
 #for mesh generation
 match dim:
@@ -288,16 +301,24 @@ match dim:
         final = final.replace("{ZMIN}", repl)
 
 #define name for the loaded microstructures
-if (pbx == 'LOADED'):
-    final_name = f"loaded_{datafile}_slice{zloc}_{dim}_up{vel}_perp{elem_perp_1}_shock{elem_shock_dir}_time{'distr' if use_distributions == 'true' else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}" 
+#query for custom name if needed
+custom_name = input('Provide a custom name for the directory and input / output files? (YES) or (NO): ')
+
+if (custom_name == 'YES'):
+    final_name = input('Enter the custom name as a string with no spaces: ')
+
+elif (pbx == 'LOADED'):
+    final_name = f"loaded_{datafile}_slice{zloc}_{dim}_up{vel}_perp{elem_perp_1}_shock{elem_shock_dir}_time{'distr' if use_distributions == 'true' else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}"
+
 else:
     final_name = f"{dim}_up{vel}_type{pbx}_perp{elem_perp_1}_shock{elem_shock_dir}_poro{particle_poro if pbx == 'PBX' else 0}_time{'distr' if use_distributions == 'true' else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}" 
 
 with open(f'{final_name}.i', "w") as f:
     f.write(final)
 
-print('File Generated !!')
-print('#################')
+print('##############################################')
+print(f'####FILE GENERATED WITH NAME: {final_name} ####')
+print('##############################################')
 
 gen_and_run = input('Generate sbatch script and submit? (YES) or (NO): ')
 

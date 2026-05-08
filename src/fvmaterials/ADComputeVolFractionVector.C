@@ -33,9 +33,6 @@ ADComputeVolFractionVector::ADComputeVolFractionVector(const InputParameters &pa
       _alpha1(getFunctor<ADReal>("alpha1")),
       _rho0(getParam<Real>("density_limit"))
 {
-
-    //recycle this object to declare rho * u
-
     addFunctorProperty<ADRealVectorValue>(
         getParam<MooseFunctorName>("vol_fraction_name"),
         [this](const auto & r, const auto & state) -> ADRealVectorValue{

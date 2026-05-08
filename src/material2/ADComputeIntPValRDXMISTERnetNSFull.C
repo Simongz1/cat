@@ -13,13 +13,13 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
 {
   InputParameters params = Material::validParams();
 
-  params.addClassDescription("Standard compute Mie Gruneisen Pressure with JWL pressure for reacted material. Also computes artificial viscosity contribution");
+  params.addClassDescription("compute MISTnetX predictions from interpolated values");
 
   //test: retrieve from name array
   params.addRequiredCoupledVar("v_components", "v_components");
   params.addRequiredCoupledVar("a_components", "a_components");
 
-  params.addRequiredParam<Real>("thr_a", "acceleration threshold");
+  params.addRequiredParam<Real>("thr_a", "acceleration threshold"); //deprecate this
   params.addRequiredParam<Real>("thr_v", "velocity threshold");
 
   //test: use gradient to compute activation
@@ -27,9 +27,9 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addCoupledVar("density_i", "Coupled value");
 
   //CSV
-  params.addRequiredParam<std::string>("csv_shock", "csv_shock");
-  params.addRequiredParam<std::string>("csv_react", "csv_react");
-  params.addRequiredParam<std::string>("csv_times", "csv_times");
+  params.addRequiredParam<std::string>("csv_shock", "the name of the csv file with shock temperature values");
+  params.addRequiredParam<std::string>("csv_react", "the name of the csv file with react temperature values");
+  params.addRequiredParam<std::string>("csv_times", "the name of the csv file with times values");
 
   params.addRequiredParam<std::string>("csv_shock_pore", "csv_shock_pore");
   params.addRequiredParam<std::string>("csv_react_pore", "csv_react_pore");
@@ -51,6 +51,9 @@ ADComputeIntPValRDXMISTERnetNSFull::validParams()
   params.addParam<bool>("use_tabular_time", false, "use_tabular_time");
   params.addParam<bool>("use_distributions", false, "use_distributions");
   params.addParam<Real>("tau_react_scaling", 1., "tau_react_scaling");
+
+  //add possible paramters for the us-up coefficients
+  params.addParam<std::vector<Real>>("us_up_coeffs", {-0.286, 1.640, 1.249391, 5.575975}, "the coefficients for the polynomial fitting of the us-up relation from larger degree to smaller degree");
   return params;
 }
 
@@ -105,97 +108,56 @@ ADComputeIntPValRDXMISTERnetNSFull::ADComputeIntPValRDXMISTERnetNSFull(
     //placeholder for distribution call
     _distribution_lower(nullptr),
     _distribution_upper(nullptr),
-    _tau_react_scaling(getParam<Real>("tau_react_scaling"))
+    _tau_react_scaling(getParam<Real>("tau_react_scaling")),
+    //get parameters for us-up
+    _coeffs(getParam<std::vector<Real>>("us_up_coeffs"))
 { 
   /////////////////////////////////////////////////////////
+
   const unsigned int n_v = coupledComponents("v_components");
   _v.reserve(n_v);
-  for (unsigned int i = 0; i < n_v; ++i)
+  for (unsigned int i = 0; i < n_v; ++i){
     _v.push_back(&adCoupledValue("v_components", i));
-
+  }
+    
   const unsigned int n_a = coupledComponents("a_components");
   _a.reserve(n_a);
-  for (unsigned int i = 0; i < n_a; ++i)
+  for (unsigned int i = 0; i < n_a; ++i){
     _a.push_back(&adCoupledValue("a_components", i));
+  }
+
+  //make the total CSV local
+  const auto csv_total_shock = readCSV(_csv_shock);
+  const auto csv_total_react = readCSV(_csv_react);
   
-  /////////////////////////////////////////////////////////
-
-  /////%%%%%%%%%%%%%%%%%%%%%%%%%/////////////////////////%%%%%%%//////
-  //here I cache the table only once
-  _csv_total_shock = readCSV(_csv_shock);
-  _csv_total_react = readCSV(_csv_react);
-
   if (_use_tabular_time){
     _csv_total_times = readCSV(_csv_times);
   }
 
-  _csv_total_shock_pore = readCSV(_csv_shock_pore);
-  _csv_total_react_pore = readCSV(_csv_react_pore);
-  _csv_total_times_pore = readCSV(_csv_times_pore);
-  //
-  _csv_total_pu = readCSV(_csv_unreacted);
-  _csv_total_pr = readCSV(_csv_reacted);
+  //read all the csv structures that are needed
+  const auto csv_total_shock_pore = readCSV(_csv_shock_pore);
+  const auto csv_total_react_pore = readCSV(_csv_react_pore);
+  const auto csv_total_times_pore = readCSV(_csv_times_pore);
+  const auto csv_total_pu = readCSV(_csv_unreacted);
+  const auto csv_total_pr = readCSV(_csv_reacted);
 
-  //retrieve nanoPBX csv data
+  //use the csv function to form the velocity vectors
+  _up_values = formVelocityVector(csv_total_shock);
+  _up_values_pore = formVelocityVector(csv_total_shock_pore);
 
-  for (auto &row : _csv_total_shock){
-    if (row.size() < 2){
-      mooseError("need bigger CSV");
-    }
-    _up_values.push_back(row[0]);
-    std::vector<Real> temps(row.begin() + 1, row.end());
-    _temperature_values_shock.push_back(std::move(temps));
-  }
-
-  for (auto &row : _csv_total_react){
-    if (row.size() < 2){
-      mooseError("need bigger CSV");
-    }
-    std::vector<Real> temps(row.begin() + 1, row.end());
-    _temperature_values_react.push_back(std::move(temps));
-  }
+  //retrieve nanoPBX csv data using the new helper function
+  _temperature_values_shock = formData(csv_total_shock);
+  _temperature_values_react = formData(csv_total_react);
 
   if (_use_tabular_time){
-    for (auto &row : _csv_total_times){
-      if (row.size() < 2){
-        mooseError("need bigger CSV");
-      }
-      std::vector<Real> times(row.begin() + 1, row.end());
-      _time_values.push_back(std::move(times));
-    }
+    _time_values = formData(_csv_total_times);
+
   }
-  
+
   //retrieve csv data for pore
-  for (auto &row : _csv_total_shock_pore){
-    if (row.size() < 2){
-      mooseError("need bigger CSV");
-    }
-    _up_values_pore.push_back(row[0]);
-    std::vector<Real> temps(row.begin() + 1, row.end());
-    _temperature_values_shock_pore.push_back(std::move(temps));
-  }
-
-  for (auto &row : _csv_total_react_pore){
-    if (row.size() < 2){
-      mooseError("need bigger CSV");
-    }
-    std::vector<Real> temps(row.begin() + 1, row.end());
-    _temperature_values_react_pore.push_back(std::move(temps));
-  }
-
-  for (auto &row : _csv_total_times_pore){
-    if (row.size() < 2){
-      mooseError("need bigger CSV");
-    }
-    std::vector<Real> times(row.begin() + 1, row.end());
-    _time_values_pore.push_back(std::move(times));
-  }
-
-  ////////////////////////////////////////////////////////////////
-  //the csv structure is J, P_u, P_r
-  //this gets the pressures as a list on a vector
-
-  ////////////////////////////////////////////////////////////////
+  _temperature_values_shock_pore = formData(csv_total_shock_pore);
+  _temperature_values_react_pore = formData(csv_total_react_pore);
+  _time_values_pore = formData(csv_total_times_pore);
 }
 
 void 
@@ -239,7 +201,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   }
 
   //define inline for L2norm
-  auto L2norm = [](const std::vector<ADReal> &vect) -> ADReal
+  auto L2norm = [](const std::vector<ADReal> & vect) -> ADReal
   {
     ADReal sum = 0;
     for (int i = 0; i < vect.size(); ++i){
@@ -261,18 +223,23 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
     }
   };
 
-  ADReal condition_v;
-  ADReal condition_a;
-  condition_v = L2norm(v_vect);
-  condition_a = L2norm(a_vect);
+  ADReal v_norm;
+  ADReal a_norm;
+  v_norm = L2norm(v_vect);
+  a_norm = L2norm(a_vect);
 
-  _us[_qp] = -0.286 * MetaPhysicL::pow(condition_v, 3.) + 
-              1.640 * MetaPhysicL::pow(condition_v, 2.) -
-              1.249391 * MetaPhysicL::pow(condition_v, 1.) +
-              5.575975;
+  //retrieve polynomial function
+  //in the future, this should read the parameters from the input
+  //_us[_qp] = -0.286 * MetaPhysicL::pow(v_norm, 3.) + 
+  //            1.640 * MetaPhysicL::pow(v_norm, 2.) -
+  //            1.249391 * MetaPhysicL::pow(v_norm, 1.) +
+  //            5.575975;
+  
+  //use the helper function
+  _us[_qp] = computeUs(v_norm, _coeffs);
   
   //declare rate for shock tracking
-  _rate_tracking[_qp] = (condition_v > _thr_v) ? _us[_qp] / (3 * _h) : ADReal(0.); //this is the time it takes for the shock to travel 3 elements
+  _rate_tracking[_qp] = (v_norm > _thr_v) ? _us[_qp] / (3 * _h) : ADReal(0.); //this is the time it takes for the shock to travel 3 elements
   //form call condition by evaluating when v is equal to a
 
   //LOGIC:
@@ -286,7 +253,7 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
 
   if (_qp==0){
     if(_v_flag[_qp]==0.){
-      if (condition_v >= _thr_v && _tracking[_qp] >= ADReal(0.99)){
+      if (v_norm >= _thr_v && _tracking[_qp] >= ADReal(0.99)){
         _call_condition = true;
       }
     }
@@ -319,8 +286,10 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
     //retrieve data based on grain or binder
     if (is_binder){ //this is the usual loop
       //assign hand coded values as placeholders
-      pred_shock = getTemperatures(call_up, id_call, "binder")[0];
-      pred_react = getTemperatures(call_up, id_call, "binder")[1];
+      //call the pair of values only once
+      const std::pair<Real, Real> temps = getTemperatures(call_up, id_call, "binder");
+      pred_shock = temps.first;
+      pred_react = temps.second;
       if (_use_tabular_time){
         pred_time  = getTimes(call_up, id_call, "binder");
       }
@@ -334,14 +303,18 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
       if (id_call <= _range_pore.front()){
         id_call_pore = _range_pore.front();
       }
-
-      pred_shock = getTemperatures(call_up, id_call_pore, "pore")[0];
-      pred_react = getTemperatures(call_up, id_call_pore, "pore")[1];
+      //call temperature only once and store both values
+      const std::pair<Real, Real> temps_pore = getTemperatures(call_up, id_call_pore, "pore");
+      
+      pred_shock = temps_pore.first;
+      pred_react = temps_pore.second;
       pred_time  = getTimes(call_up, id_call_pore, "pore");
     }
     else{
-      pred_shock = getTemperatures(call_up, id_call, "bulk")[0];
-      pred_react = getTemperatures(call_up, id_call, "bulk")[1];
+      //make consistent here too
+      const std::pair<Real, Real> temps_bulk = getTemperatures(call_up, id_call, "bulk");
+      pred_shock = temps_bulk.first;
+      pred_react = temps_bulk.second;
 
       if (_use_tabular_time){
         pred_time  = getTimes(call_up, id_call, "bulk");
@@ -388,14 +361,19 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
 }
 
 //interpolate between values
-std::vector<Real>
-ADComputeIntPValRDXMISTERnetNSFull::interpolation(const std::vector<Real> A, const std::vector<Real> B, const Real t){
-  std::vector<Real> res;
-  res.reserve(A.size());
-  for (size_t i = 0; i < A.size(); ++i){
-    res.push_back((1. - t) * A[i] + t * B[i]);
-  }
-  return res;
+//use pointers to avoid memory issues
+//make interpolation term wise 
+Real
+ADComputeIntPValRDXMISTERnetNSFull::interpolation(const std::vector<Real> & A, const std::vector<Real> & B, const Real t, const unsigned int index){
+  //directly use the index to perform interpolation
+  //std::vector<Real> res;
+  //res.reserve(A.size());
+  //for (size_t i = 0; i < A.size(); ++i){
+  //  res.push_back((1. - t) * A[i] + t * B[i]);
+  //}
+  Real value;
+  value = (1. - t) * A[index] + t * B[index];
+  return value;
 }
 
 //helper function to read CSV file
@@ -405,7 +383,6 @@ ADComputeIntPValRDXMISTERnetNSFull::readCSV(const std::string csv_file_name){
   if (!file.is_open()){
     mooseError("can't open CSV file");
   }
-
   std::vector<std::vector<Real>> data;
   std::string line;
   while (std::getline(file, line)){
@@ -427,160 +404,148 @@ ADComputeIntPValRDXMISTERnetNSFull::readCSV(const std::string csv_file_name){
   return data;
 }
 
-std::vector<Real>
+//helper function to retrieve temperatures
+std::pair<Real, Real>
 ADComputeIntPValRDXMISTERnetNSFull::getTemperatures(const Real up, const int id, const std::string phase){
 
-  Real lower_bound;
-  Real upper_bound;
+  //forward declaration
+  Real lower_bound, upper_bound, interval_number;
 
-  Real interval_number;
+  //change these to null pointers
+  const std::vector<Real> * lower_temps_shock = nullptr;
+  const std::vector<Real> * upper_temps_shock = nullptr;
+  const std::vector<Real> * lower_temps_react = nullptr;
+  const std::vector<Real> * upper_temps_react = nullptr;
 
-  std::vector<Real> lower_temps_shock;
-  std::vector<Real> upper_temps_shock;
+  //std::vector<Real> lower_temps_shock, upper_temps_shock;
+  //std::vector<Real> lower_temps_react, upper_temps_react;
 
-  std::vector<Real> lower_temps_react;
-  std::vector<Real> upper_temps_react;
+  //to use the same interval, call it here
+  _interval = computeInterval(up, _up_values);
+  _interval_pore = computeInterval(up, _up_values_pore);
 
   //here we need to branch based on the phase
   if (phase == "binder"){
-    for (unsigned int i = 1; i < _up_values.size(); ++i){
-      if (_up_values[i] > up){
-        lower_bound = _up_values[i - 1];
-        upper_bound = _up_values[i];
-        interval_number = i - 1;
-        _interval = interval_number;
-        
-        lower_temps_shock = _temperature_values_shock[i - 1];
-        upper_temps_shock = _temperature_values_shock[i];
+    //direct assignment of the shock temperatures
+    //dereference the pointers here to assign value
+    lower_temps_shock = &_temperature_values_shock[_interval];
+    upper_temps_shock = &_temperature_values_shock[_interval + 1];
 
-        lower_temps_react = _temperature_values_react[i - 1];
-        upper_temps_react = _temperature_values_react[i];
-        break;
-      }
-    }
+    //direct assignment of the reaction temperatures
+    lower_temps_react = &_temperature_values_react[_interval];
+    upper_temps_react = &_temperature_values_react[_interval + 1];
+
+    //and also assign bounds for interpolation
+    lower_bound = _up_values[_interval];
+    upper_bound = _up_values[_interval + 1];
   }
   else if (phase == "pore"){
-    for (unsigned int j = 1; j < _up_values_pore.size(); ++j){
-      if (_up_values_pore[j] > up){
-        lower_bound = _up_values_pore[j - 1];
-        upper_bound = _up_values_pore[j];
-        interval_number = j - 1;
-        _interval = interval_number;
+    //direct assignment of shock temperatures
+    lower_temps_shock = &_temperature_values_shock_pore[_interval_pore];
+    upper_temps_shock = &_temperature_values_shock_pore[_interval_pore + 1];
 
-        lower_temps_shock = _temperature_values_shock_pore[j - 1];
-        upper_temps_shock = _temperature_values_shock_pore[j];
+    //direct assignment of reaction temperatures
+    lower_temps_react = &_temperature_values_react_pore[_interval_pore];
+    upper_temps_react = &_temperature_values_react_pore[_interval_pore + 1];
 
-        lower_temps_react = _temperature_values_react_pore[j - 1];
-        upper_temps_react = _temperature_values_react_pore[j];
-        break;
-      }
-    }
+    //assign bounds
+    lower_bound = _up_values_pore[_interval_pore];
+    upper_bound = _up_values_pore[_interval_pore + 1];
   }
   else if (phase == "bulk"){
-    for (unsigned int k = 1; k < _up_values.size(); ++k){
-      if (_up_values[k] > up){
-        lower_bound = _up_values[k - 1];
-        upper_bound = _up_values[k];
-        interval_number = k - 1;
-        _interval = interval_number;
-        
-        lower_temps_shock = _temperature_values_shock[k - 1];
-        upper_temps_shock = _temperature_values_shock[k];
+    //direct assignment of shock temperatures
+    lower_temps_shock = &_temperature_values_shock[_interval];
+    upper_temps_shock = &_temperature_values_shock[_interval + 1];
 
-        lower_temps_react = _temperature_values_react[k - 1];
-        upper_temps_react = _temperature_values_react[k];
-        break;
-      }
-    }
+    //direct assingmnet of reaction temperatures
+    lower_temps_react = &_temperature_values_react[_interval];
+    upper_temps_react = &_temperature_values_react[_interval + 1];
+
+    //assign bounds
+    lower_bound = _up_values[_interval];
+    upper_bound = _up_values[_interval + 1];
   }
 
+  //this assigns the ratio
   Real t = (up - lower_bound) / (upper_bound - lower_bound);
 
   //test: use this same t to interpolate time
-
   _ratio = t;
 
-  //interpolate temperatures based on t
-  //these interpolation steps are naive to the microstructure type
-  std::vector<Real> interpolated_temps_shock = interpolation(lower_temps_shock, upper_temps_shock, t); //this had an error
-  std::vector<Real> interpolated_temps_react = interpolation(lower_temps_react, upper_temps_react, t);
-
-  //here we need to do branching again based on the type of microstructure
   Real temp_shock;
   Real temp_react;
 
   if (phase == "binder"){ //traditional branch
-    temp_shock = interpolated_temps_shock.at(id);
-    temp_react = interpolated_temps_react.at(id);
+    temp_shock = interpolation(*lower_temps_shock, *upper_temps_shock, t, id);
+    temp_react = interpolation(*lower_temps_react, *upper_temps_react, t, id);
   }
+
   if (phase == "pore"){
     //the pore microstructures are 101, 102, 103, so we need to subtract to access the data
     int id_pore = static_cast<int>(std::round(id - _range_pore.front()));
 
-    id_pore = std::max(0, std::min(id_pore, static_cast<int>(interpolated_temps_shock.size()) - 1));
+    id_pore = std::max(0, std::min(id_pore, static_cast<int>(lower_temps_shock->size()) - 1));
     
     //now access pore data
-    temp_shock = interpolated_temps_shock.at(id_pore);
-    temp_react = interpolated_temps_react.at(id_pore);
+    temp_shock = interpolation(*lower_temps_shock, *upper_temps_shock, t, id_pore);
+    temp_react = interpolation(*lower_temps_react, *upper_temps_react, t, id_pore);
   }
   if (phase == "bulk"){
     //bulk will preserve the nanoPBX data, but will be called all at an insensitive microstructure
     int id_bulk = _bulk_sensitivity; //the most insensitive, this can be tuned until bulk data is available
     
     //now access bulk data
-    temp_shock = interpolated_temps_shock.at(id_bulk);
-    temp_react = interpolated_temps_react.at(id_bulk);
+    temp_shock = interpolation(*lower_temps_shock, *upper_temps_shock, t, id_bulk);
+    temp_react = interpolation(*lower_temps_react, *upper_temps_react, t, id_bulk);
   }
 
-  return {temp_shock, temp_react};
+  //make the return type consistent
+  return std::make_pair(temp_shock, temp_react);
 }
-
-//times will be edited in a similar manner to account for different phases
 
 Real
 ADComputeIntPValRDXMISTERnetNSFull::getTimes(const Real up, const int id, const std::string phase){
 
   //create times lower and upper
-  std::vector<Real> lower_times;
-  std::vector<Real> upper_times;
+  const std::vector<Real> * lower_times;
+  const std::vector<Real> * upper_times;
 
   //define lower and upper times
   //here we account for the phase of the element
 
   if (phase == "binder"){
     //traditional branch
-    lower_times = _time_values[_interval];
-    upper_times = _time_values[_interval + 1];
+    lower_times = &_time_values[_interval];
+    upper_times = &_time_values[_interval + 1];
   }
   if (phase == "pore"){
     //here we use the pore time values
-    lower_times = _time_values_pore[_interval];
-    upper_times = _time_values_pore[_interval + 1];
+    lower_times = &_time_values_pore[_interval];
+    upper_times = &_time_values_pore[_interval + 1];
   }
   if (phase == "bulk"){
     //preserve base nanoPBX
-    lower_times = _time_values[_interval];
-    upper_times = _time_values[_interval + 1];
+    lower_times = &_time_values[_interval];
+    upper_times = &_time_values[_interval + 1];
   }
 
   //interpolate based on previously computed interval and balance number
-  std::vector<Real> interpolated_times = interpolation(lower_times, upper_times, _ratio); //this had an error
-  
+
   //return based on microstructures
   Real time_value;
 
   if (phase == "binder"){
-    time_value = interpolated_times.at(id);
+    time_value = interpolation(*lower_times, *upper_times, _ratio, id);
   }
 
   if (phase == "pore"){
     const int id_pore = id - 101;
-    time_value = interpolated_times.at(id_pore);
+    time_value = interpolation(*lower_times, *upper_times, _ratio, id_pore);
   }
 
   if (phase == "bulk"){
     int id_bulk = _bulk_sensitivity;
-    time_value = interpolated_times.at(id_bulk);
+    time_value = interpolation(*lower_times, *upper_times, _ratio, id_bulk);
   }
 
   //return whatever value went through
@@ -621,4 +586,66 @@ ADComputeIntPValRDXMISTERnetNSFull::getDistributionTime(const Real up, const Rea
   const Real interpolated_value = lower_time + (dist) * (upper_time - lower_time);
 
   return interpolated_value;
+}
+
+//we can define an explicit function that computes the interval of u_p where we are
+
+Real
+ADComputeIntPValRDXMISTERnetNSFull::computeInterval(const Real up, const std::vector<Real> & up_values){
+  //define value to retunr
+  //dereference the pointer for the vector of up values
+  const std::vector<Real> & up_vals = up_values;
+
+  //iterate
+  Real interval_number = 0.;
+  for (unsigned int i = 1; i < up_vals.size(); ++i){
+    //find the i values where up_call is between the lower and the upper bounds of the interval
+    if (up_vals[i] > up){
+      interval_number = i - 1;
+      break;
+    }
+  }
+  return interval_number;
+}
+
+//define a function that forms the vectors neeeded for interpolation
+//this takes vector of vectors and returns the member vector
+
+std::vector<std::vector<Real>>
+ADComputeIntPValRDXMISTERnetNSFull::formData(const std::vector<std::vector<Real>> & csv){
+  //form output
+  std::vector<std::vector<Real>> data;
+
+  //iterate
+  for (auto &row : csv){
+    if (row.size() < 2){
+      mooseError("need bigger CSV");
+    }
+  
+    data.emplace_back(row.begin() + 1, row.end());
+  }
+  return data;
+}
+
+//also generate a function to form velocity vectors for intepolation
+std::vector<Real>
+ADComputeIntPValRDXMISTERnetNSFull::formVelocityVector(const std::vector<std::vector<Real>> & csv){
+  //form output
+  std::vector<Real> velocity;
+  for (auto & row : csv){
+    //no need to check for size here
+    velocity.emplace_back(row[0]);
+  }
+  return velocity;
+}
+
+//define helper function to evaluate us-up relation
+ADReal
+ADComputeIntPValRDXMISTERnetNSFull::computeUs(const ADReal & up, const std::vector<Real> & coeffs){
+  //form the polynomial from the coefficients
+  ADReal us = ADReal(0.);
+  for (unsigned int i = 0; i < coeffs.size(); ++i){
+    us += coeffs[i] * MetaPhysicL::pow(up, static_cast<int>(coeffs.size() - 1 - i));
+  }
+  return us;
 }

@@ -79,6 +79,7 @@ protected:
   Distribution const *_distribution_upper;
 
   const Real _tau_react_scaling;
+  const std::vector<Real> _coeffs;
 
   /////////////////////////////////
 
@@ -109,13 +110,18 @@ protected:
   //definitions for global interpolation
 
   Real _interval;
+  Real _interval_pore;
   Real _ratio;
 
   virtual void initQpStatefulProperties() override;
   virtual void computeQpProperties() override;
-  virtual std::vector<Real> interpolation(const std::vector<Real> A, const std::vector<Real> B, const Real t);
+  virtual Real interpolation(const std::vector<Real> & A, const std::vector<Real> & B, const Real t, const unsigned int index);
   virtual std::vector<std::vector<Real>> readCSV(const std::string csv_name);
-  virtual std::vector<Real> getTemperatures(const Real up, const int id, const std::string phase);
+  virtual std::pair<Real, Real> getTemperatures(const Real up, const int id, const std::string phase);
   virtual Real getTimes(const Real up, const int id, const std::string phase);
   virtual Real getDistributionTime(const Real up, const Real predicted_temp);
+  virtual Real computeInterval(const Real up, const std::vector<Real> & up_values);
+  virtual std::vector<std::vector<Real>> formData(const std::vector<std::vector<Real>> & csv);
+  virtual std::vector<Real> formVelocityVector(const std::vector<std::vector<Real>> & csv);
+  virtual ADReal computeUs(const ADReal & up, const std::vector<Real> & coeffs);
 };

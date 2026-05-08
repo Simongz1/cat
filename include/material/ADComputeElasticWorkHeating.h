@@ -31,4 +31,5 @@ private:
 
     const bool _consistent_tau;
     const ADMaterialProperty<Real> &_time_react;
+    const Real _sign;
 };

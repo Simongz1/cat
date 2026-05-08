@@ -14,6 +14,8 @@ ADComputeElasticWorkHeating::validParams()
     params.addRequiredCoupledVar("dirac_switch_react", "dirac_switch_react");
     params.addRequiredParam<Real>("thr_activation", "thr_activation");
     params.addParam<bool>("consistent_tau", true, "consistent_tau");
+    //add a parameter to control the sign
+    params.addParam<Real>("compression_sign", 1., "the sign of the compression heat source positiveness");
     return params;
 }
 
@@ -33,7 +35,8 @@ ADComputeElasticWorkHeating::ADComputeElasticWorkHeating(const InputParameters &
     _q_elastic(declareADProperty<Real>("q_elastic")),
     _norm_gradT(declareADProperty<Real>("norm_gradT")),
     _consistent_tau(getParam<bool>("consistent_tau")),
-    _time_react(getADMaterialProperty<Real>("time_react"))
+    _time_react(getADMaterialProperty<Real>("time_react")),
+    _sign(getParam<Real>("compression_sign"))
 {   
 }
 
@@ -60,6 +63,6 @@ ADComputeElasticWorkHeating::computeQpProperties()
         q_pressure *= 0.; //set to zero before activation
     }
 
-    _q_elastic[_qp] = q_pressure;
+    _q_elastic[_qp] = q_pressure * _sign; //multiplication by sign
     _norm_gradT[_qp] = _Tgrad[_qp].norm();
 }

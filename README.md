@@ -19,6 +19,8 @@ A pre-packaged python interface is provided to generated input files based on a 
 3. The different simulation paramters such as reactive model configuration, scaling, mesh size, output frequency.
 4. Some paramters, such as EOS, kinetics, plasticity, are preset, but can be adapted to special needs.
 
+To make use of the prepackaged scripts, users must copy the files /pyscripts/generate_input.py, /bash/sbatch_template, the template input at /inputs/distributions_template.i, and the csv files at /csv should all be located inside the same directory. In case a particular architecture or file distribution is required, the provided files must be edited to provide accurate absolute paths for all modifications.
+
 Prepackaged scripts to generate P-x, P-t, Hugoniot, Pop-plot, and calculate run to detonation distances are available under /pyscripts/, where prompts can be followed. 
 
 Eulerian capabilities using the Finite Volume method base objects provided by MOOSE (see [Finite Volume MOOSE](https://mooseframework.inl.gov/finite_volumes/fv_design.html)) are currently under development and implementation. Input files for two-phase hydrodynamic shock compression of a low density cavity are available under /inputs/, and the finite volume objects (Functors, Kernels. AuxKernels) are available under the /fv*/ directories.

@@ -55,6 +55,9 @@ nu = 0.24
 
   #scale reaction time
   tau_react_scaling = {SCALING_TAU}
+
+  #coefficients for the us_up relation
+  {USUP_COEFFS}
 []
 
 #add a block for the loaded microstructure in case it is needed
@@ -754,3 +757,4 @@ nu = 0.24
     wall_time_interval = {{FREC}}
   []
 []
+

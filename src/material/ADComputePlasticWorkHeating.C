@@ -12,6 +12,8 @@ ADComputePlasticWorkHeating::validParams()
     params.addRequiredCoupledVar("dirac_switch_react", "dirac_switch_react");
     params.addRequiredParam<Real>("thr_activation", "thr_activation");
     params.addParam<bool>("consistent_tau", true, "consistent_tau");
+    //add sign of plastic dissipation
+    params.addParam<Real>("plastic_dissipation_sign", 1., "the sign of the plastic dissipation positiveness");
     return params;
 }
 
@@ -26,7 +28,8 @@ ADComputePlasticWorkHeating::ADComputePlasticWorkHeating(const InputParameters &
     //declare heat sourves
     _q_plastic(declareADProperty<Real>("q_plastic")),
     _consistent_tau(getParam<bool>("consistent_tau")),
-    _time_react(getADMaterialProperty<Real>("time_react"))
+    _time_react(getADMaterialProperty<Real>("time_react")),
+    _sign(getParam<Real>("plastic_dissipation_sign"))
 {   
 }
 
@@ -49,5 +52,5 @@ ADComputePlasticWorkHeating::computeQpProperties()
     }
 
     //append into actual material property
-    _q_plastic[_qp] = q_plastic;
+    _q_plastic[_qp] = q_plastic * _sign;
 }
