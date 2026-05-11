@@ -227,13 +227,6 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
   ADReal a_norm;
   v_norm = L2norm(v_vect);
   a_norm = L2norm(a_vect);
-
-  //retrieve polynomial function
-  //in the future, this should read the parameters from the input
-  //_us[_qp] = -0.286 * MetaPhysicL::pow(v_norm, 3.) + 
-  //            1.640 * MetaPhysicL::pow(v_norm, 2.) -
-  //            1.249391 * MetaPhysicL::pow(v_norm, 1.) +
-  //            5.575975;
   
   //use the helper function
   _us[_qp] = computeUs(v_norm, _coeffs);
@@ -365,12 +358,6 @@ ADComputeIntPValRDXMISTERnetNSFull::computeQpProperties()
 //make interpolation term wise 
 Real
 ADComputeIntPValRDXMISTERnetNSFull::interpolation(const std::vector<Real> & A, const std::vector<Real> & B, const Real t, const unsigned int index){
-  //directly use the index to perform interpolation
-  //std::vector<Real> res;
-  //res.reserve(A.size());
-  //for (size_t i = 0; i < A.size(); ++i){
-  //  res.push_back((1. - t) * A[i] + t * B[i]);
-  //}
   Real value;
   value = (1. - t) * A[index] + t * B[index];
   return value;
@@ -416,9 +403,6 @@ ADComputeIntPValRDXMISTERnetNSFull::getTemperatures(const Real up, const int id,
   const std::vector<Real> * upper_temps_shock = nullptr;
   const std::vector<Real> * lower_temps_react = nullptr;
   const std::vector<Real> * upper_temps_react = nullptr;
-
-  //std::vector<Real> lower_temps_shock, upper_temps_shock;
-  //std::vector<Real> lower_temps_react, upper_temps_react;
 
   //to use the same interval, call it here
   _interval = computeInterval(up, _up_values);
