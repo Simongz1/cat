@@ -258,7 +258,7 @@ final = final.replace("{USUP_COEFFS}", str(f"us_up_coeffs = '{string_us_up}'") i
 
 #query compression sign
 compression_sign = int(input('Provide sign of positive compression (1) or (-1): '))
-final = final.replace("{COMPRESSION_SIGN}", str(f"compression_sign = {compression_sign}")
+final = final.replace("{COMPRESSION_SIGN}", str(f"compression_sign = {compression_sign}"))
 
 #for mesh generation
 match dim:

@@ -8,10 +8,12 @@ public:
     static InputParameters validParams();
     ADComputeMieGruneisenPressure(const InputParameters & params);
 protected:
-    const Moose::Functor<ADReal> &_sie_mix;
-    const Moose::Functor<ADReal> &_gamma1;
-    const Moose::Functor<ADReal> &_gamma2;
-    const Moose::Functor<ADReal> &_pi1;
-    const Moose::Functor<ADReal> &_pi2;
-    const Moose::Functor<ADReal> &_alpha1;
+    const Real _K0;
+    const Real _s;
+    const Real _gamma;
+    const Moose::Functor<ADReal> &_rho;
+    const Moose::Functor<ADReal> &_rho0;
+    const Moose::Functor<ADReal> &_sie;
+    const Moose::Functor<ADReal> &_sie0;
+    const Real _density_limit;
 };
