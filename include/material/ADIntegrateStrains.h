@@ -23,14 +23,14 @@ protected:
   virtual void computeQpProperties() override;
 
   ADMaterialProperty<RankTwoTensor> &_epsilon_p;
-  //ADMaterialProperty<RankTwoTensor> &_epsilon_c;
+  ADMaterialProperty<RankTwoTensor> &_epsilon_c;
   ADMaterialProperty<RankTwoTensor> &_epsilon_T;
 
   const MaterialProperty<RankTwoTensor> &_epsilon_p_old;
-  //const MaterialProperty<RankTwoTensor> &_epsilon_c_old;
+  const MaterialProperty<RankTwoTensor> &_epsilon_c_old;
 
-  const MaterialProperty<RankTwoTensor> &_epsilon_p_dot_old;
-  //const ADMaterialProperty<RankTwoTensor> &_epsilon_c_dot;
+  const ADMaterialProperty<RankTwoTensor> &_epsilon_p_dot;
+  const ADMaterialProperty<RankTwoTensor> &_epsilon_c_dot;
 
   const ADVariableValue &_temperature;
   const ADMaterialProperty<Real> &_alpha_thermal;

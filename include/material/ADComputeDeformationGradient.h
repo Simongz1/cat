@@ -28,4 +28,5 @@ protected:
   const MaterialProperty<RankTwoTensor> &_F_old;
   ADMaterialProperty<RankTwoTensor> &_C;
   ADMaterialProperty<RankTwoTensor> &_epsilon;
+  ADMaterialProperty<Real> &_J_dot;
 };

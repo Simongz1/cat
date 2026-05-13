@@ -110,7 +110,6 @@ protected:
   ADMaterialProperty<RankTwoTensor> &_Fres;
   ADMaterialProperty<RankTwoTensor> &_E;
   ADMaterialProperty<RankTwoTensor> &_E_dot;
-  ADMaterialProperty<RankTwoTensor> &_sigma;
 
   const unsigned int _ndisp;
 

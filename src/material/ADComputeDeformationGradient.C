@@ -20,7 +20,8 @@ ADComputeDeformationGradient::ADComputeDeformationGradient(
     _F(declareADProperty<RankTwoTensor>("F")),
     _F_old(getMaterialPropertyOld<RankTwoTensor>("F")),
     _C(declareADProperty<RankTwoTensor>("C")),
-    _epsilon(declareADProperty<RankTwoTensor>("epsilon"))
+    _epsilon(declareADProperty<RankTwoTensor>("epsilon")),
+    _J_dot(declareADProperty<Real>("J_dot"))
 {}
 
 void
@@ -41,6 +42,7 @@ ADComputeDeformationGradient::computeQpProperties()
 { 
   ADRankTwoTensor I;
   I.setToIdentity();
+
   //form incremental deformation gradient
   ADRankTwoTensor dF = _rotation_increment[_qp] * (I + _strain_increment[_qp]);
   _F[_qp] = dF * _F_old[_qp];
@@ -66,6 +68,9 @@ ADComputeDeformationGradient::computeQpProperties()
   //assemble logC
   ADRankTwoTensor logC = Q * logDiag * Q.transpose();
 
-  //store
+  //store small strain
   _epsilon[_qp] = 0.5 * logC;
+
+  //compute J_dot
+  _J_dot[_qp] = ((1. / _dt) * (_F[_qp] - _F_old[_qp])).det();
 }

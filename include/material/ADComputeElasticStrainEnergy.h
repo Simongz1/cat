@@ -65,4 +65,10 @@ protected:
   ADMaterialProperty<Real> &_sM;
   ADMaterialProperty<RankTwoTensor> &_nMnM;
   ADMaterialProperty<Real> &_s_pressure;
+
+  const Real _C0;
+  const Real _C1;
+  const ADMaterialProperty<Real> &_J_dot;
+  const ADVariableValue &_h;
+  const ADMaterialProperty<Real> &_sound_speed;
 };

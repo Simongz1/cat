@@ -10,7 +10,6 @@ ADComputeElasticStrainEnergy::validParams()
   params.addClassDescription("elastic strain energy constitutive model");
   params.addRequiredCoupledVar("temperature", "temperature");
   params.addRequiredCoupledVar("c", "c");
-  //variables
 
   //parameters
   params.addRequiredParam<Real>("lambda", "lambda");
@@ -20,7 +19,11 @@ ADComputeElasticStrainEnergy::validParams()
   params.addRequiredParam<Real>("c1", "c1");
   params.addRequiredParam<Real>("c2", "c2");
   params.addRequiredParam<Real>("c3", "c3");
-  
+
+  //for artificial viscosity
+  params.addParam<Real>("C0", 0.1, "C0 parameter for artificial viscosity");
+  params.addParam<Real>("C1", 1.0, "C1 parameter for artificial viscosity");
+  params.addRequiredCoupledVar("h", "the name of the variable storing the element size");
   return params;
 }
 
@@ -66,7 +69,14 @@ ADComputeElasticStrainEnergy::ADComputeElasticStrainEnergy(
 
     _sM(declareADProperty<Real>("sM")),
     _nMnM(declareADProperty<RankTwoTensor>("nMnM")),
-    _s_pressure(declareADProperty<Real>("s_pressure"))
+    _s_pressure(declareADProperty<Real>("s_pressure")),
+
+    //parameters for artificial viscosity
+    _C0(getParam<Real>("C0")),
+    _C1(getParam<Real>("C1")),
+    _J_dot(getADMaterialProperty<Real>("J_dot")),
+    _h(adCoupledValue("h_min")),
+    _sound_speed(getADMaterialProperty<Real>("sound_speed"))
 {}
 
 void
@@ -110,7 +120,7 @@ ADComputeElasticStrainEnergy::computeQpProperties()
   std::vector<ADReal> lam(3);
   _C[_qp].symmetricEigenvaluesEigenvectors(lam, Q);
 
-  //form rank 2 tensor from proncipal directions
+  //form rank 2 tensor from principal directions
   std::vector<ADRankTwoTensor> M(3);
   
   for (unsigned int a = 0; a < 3; ++a){
@@ -178,6 +188,14 @@ ADComputeElasticStrainEnergy::computeQpProperties()
   _pk1_stress[_qp] *= _D[_qp];
   _pk2_stress[_qp] *= _D[_qp];
   _stress[_qp] *= _D[_qp];
+
+  //compute and add artificial viscosity
+  ADReal p_av = 0.;
+  p_av = _C0 * _J_dot[_qp] * MetaPhysicL::abs(_J_dot[_qp]) / (J * J) * _h[_qp];
+  p_av += _C1 * _sound_speed[_qp] * _density[_qp] * (_J_dot[_qp] / J) * _h[_qp];
+
+  //add artificial viscosity to stress
+  _stress[_qp] += p_av * I; //only volumetric contribution
 
   //define history variable
   ADReal driving_energy;

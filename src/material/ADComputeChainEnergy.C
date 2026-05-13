@@ -110,7 +110,6 @@ ADComputeChainEnergy::ADComputeChainEnergy(
     _E_dot(declareADProperty<RankTwoTensor>("E_dot")),
 
     //cauchy stress
-    _sigma(declareADProperty<RankTwoTensor>("sigma")),
     _ndisp(coupledComponents("displacements")),
 
     //get base increments
