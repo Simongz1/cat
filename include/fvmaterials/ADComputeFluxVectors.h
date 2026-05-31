@@ -3,11 +3,11 @@
 #include "FunctorMaterial.h"
 #include <cmath>
 
-class ADComputeStressTensor : public FunctorMaterial
+class ADComputeFluxVectors : public FunctorMaterial
 {
 public:
     static InputParameters validParams();
-    ADComputeStressTensor(const InputParameters & params);
+    ADComputeFluxVectors(const InputParameters & params);
 protected:
     // const Moose::Functor<ADReal> &_rhoX_x;
     // const Moose::Functor<ADReal> &_rhoX_y;
@@ -21,10 +21,10 @@ protected:
     const Moose::Functor<ADReal> &_X20;
     const Moose::Functor<ADReal> &_X21;
     const Moose::Functor<ADReal> &_X22;
-    const Moose::Functor<ADReal> &_lambda;
-    const Moose::Functor<ADReal> &_mu;
+
     const Moose::Functor<ADRealVectorValue> &_m;
     const Moose::Functor<ADReal> &_rho;
-
-    const std::string _strain_type;
+    const unsigned int _component;
+    const unsigned int _direction;
+    const std::string _flux_base;
 };

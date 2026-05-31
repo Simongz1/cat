@@ -231,24 +231,24 @@ PolycrystalDensityUO::initialSetup(){
     unsigned int nearest = 0;
     
     //this finds the nearest center at each element
-    for (unsigned int i = 0; i < _centers.size(); ++i)
-    {
-      const Real d = (centroid - _centers[i]).norm();
-      if (d < min_dist)
-      {
-        second_min_dist = min_dist;
-        min_dist = d;
-        nearest = i;
-
-        //use the nearest center to assign the grainID
-        _grainID.push_back(i + 1); //this has an arbitrary reference at 1, 0 will be left for binder
-
-        //now we need to make sure to assign grain ID only from 1 to _n_grains, 0 will be binder
-      }
-      else if (d < second_min_dist){
-        second_min_dist = d;
-      }
-    }
+    //for (unsigned int i = 0; i < _centers.size(); ++i)
+    //{
+    //  const Real d = (centroid - _centers[i]).norm();
+    //  if (d < min_dist)
+    //  {
+    //    second_min_dist = min_dist;
+    //    min_dist = d;
+    //    nearest = i;
+//
+    //    //use the nearest center to assign the grainID
+    //    _grainID.push_back(i + 1); //this has an arbitrary reference at 1, 0 will be left for binder
+//
+    //    //now we need to make sure to assign grain ID only from 1 to _n_grains, 0 will be binder
+    //  }
+    //  else if (d < second_min_dist){
+    //    second_min_dist = d;
+    //  }
+    //}
 
     //generalized definition of three cases
     bool is_pore = false;
@@ -320,6 +320,7 @@ PolycrystalDensityUO::initialSetup(){
         euler2 = grain_euler2[nearest];
         euler3 = grain_euler3[nearest];
       }
+      
       //else if (is_grain){
       //  density_val = static_cast<Real>(_bulk_MicroID);
       //  grainID = static_cast<Real>(nearest + 1);
@@ -328,6 +329,7 @@ PolycrystalDensityUO::initialSetup(){
       //  euler2 = grain_euler2[nearest];
       //  euler3 = grain_euler3[nearest];
       //}
+
       else{
         density_val = _range_out[0] + rand_value * (_range_out[1] - _range_out[0]);
         grainID = 0; //this corresponds to binder
@@ -366,7 +368,7 @@ PolycrystalDensityUO::initialSetup(){
       dof_map.dof_indices(elem, dof_indices_euler2, var_euler2.number());
       dof_map.dof_indices(elem, dof_indices_euler3, var_euler3.number());
 
-      //write into variable
+      //write into variables
 
       for (auto dof : dof_indices_euler1){
         sys.solution().set(dof, euler1);

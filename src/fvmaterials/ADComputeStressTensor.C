@@ -2,6 +2,10 @@
 #include "FunctorMaterial.h"
 #include "SystemBase.h"
 #include <cmath>
+#include "MathFVUtils.h"
+#include <type_traits>
+#include "MooseFunctorArguments.h"
+#include "FaceInfo.h"
 
 registerMooseObject("mlApp", ADComputeStressTensor);
 
@@ -10,207 +14,218 @@ ADComputeStressTensor::validParams(){
 
     InputParameters params = FunctorMaterial::validParams();
     params.addClassDescription("reconstructs the Lagrangian deformation gradient from the partial gradients of each component of the inverse map field");
-    params.addRequiredParam<MooseFunctorName>("map_x_gradient", "name of gradient of the x component of the inverse map");
-    params.addRequiredParam<MooseFunctorName>("map_y_gradient", "name of gradient of the x component of the inverse map");
-    params.addRequiredParam<MooseFunctorName>("map_z_gradient", "name of gradient of the x component of the inverse map");
-    params.addRequiredParam<MooseFunctorName>("lame_lambda", "name of the lambda lame constant");
-    params.addRequiredParam<MooseFunctorName>("lame_mu", "name of the mu lame constant");
+
+    //request the full material point position vector
+    // params.addRequiredParam<MooseFunctorName>("rhoX_x_name", "name of the material point position vector multiplied by the density in the x direction");
+    // params.addRequiredParam<MooseFunctorName>("rhoX_y_name", "name of the material point position vector multiplied by the density in the y direction");
+    // params.addRequiredParam<MooseFunctorName>("rhoX_z_name", "name of the material point position vector multiplied by the density in the z direction");
+    params.addParam<MooseFunctorName>("X00", "X00", "name of the 00 component of the inverse deformation gradient");
+    params.addParam<MooseFunctorName>("X01", "X01", "name of the 01 component of the inverse deformation gradient");
+    params.addParam<MooseFunctorName>("X02", "X02", "name of the 02 component of the inverse deformation gradient");
+    params.addParam<MooseFunctorName>("X10", "X10", "name of the 10 component of the inverse deformation gradient");
+    params.addParam<MooseFunctorName>("X11", "X11", "name of the 11 component of the inverse deformation gradient");
+    params.addParam<MooseFunctorName>("X12", "X12", "name of the 12 component of the inverse deformation gradient");
+    params.addParam<MooseFunctorName>("X20", "X20", "name of the 20 component of the inverse deformation gradient");
+    params.addParam<MooseFunctorName>("X21", "X21", "name of the 21 component of the inverse deformation gradient");
+    params.addParam<MooseFunctorName>("X22", "X22", "name of the 22 component of the inverse deformation gradient");
+
+    params.addRequiredParam<MooseFunctorName>("lambda_name", "name of the lambda lame constant");
+    params.addRequiredParam<MooseFunctorName>("mu_name", "name of the mu lame constant");
 
     //also provide directly momentum components and density
-    params.addRequiredParam<MooseFunctorName>("momentum_vector", "name of the momentum vector");
-    params.addRequiredParam<MooseFunctorName>("density", "name of the density variable");
+    params.addRequiredParam<MooseFunctorName>("momentum_vector_name", "name of the momentum vector");
+    params.addRequiredParam<MooseFunctorName>("density_name", "name of the density variable");
 
     ////
-    params.addRequiredParam<MooseFunctorName>("stress_x_name", "name of the stress component in the x direction");
-    params.addRequiredParam<MooseFunctorName>("stress_y_name", "name of the stress component in the y direction");
-    params.addRequiredParam<MooseFunctorName>("stress_z_name", "name of the stress component in the z direction");
+    params.addRequiredParam<MooseFunctorName>("stress_col1_name", "name of the stress column 1");
+    params.addRequiredParam<MooseFunctorName>("stress_col2_name", "name of the stress column 2");
+    params.addRequiredParam<MooseFunctorName>("stress_col3_name", "name of the stress column 3");
 
-    params.addRequiredParam<MooseFunctorName>("T_x_name", "name of the mechanical flux tensor component in the x direction");
-    params.addRequiredParam<MooseFunctorName>("T_y_name", "name of the mechanical flux tensor component in the y direction");
-    params.addRequiredParam<MooseFunctorName>("T_z_name", "name of the mechanical flux tensor component in the z direction");
+    params.addRequiredParam<MooseFunctorName>("T_row1_name", "name of the mechanical flux tensor component in the x direction");
+    params.addRequiredParam<MooseFunctorName>("T_row2_name", "name of the mechanical flux tensor component in the y direction");
+    params.addRequiredParam<MooseFunctorName>("T_row3_name", "name of the mechanical flux tensor component in the z direction");
+    params.addParam<std::string>("strain_type", "small_strain", "type of strain formulation");
+
     return params;
-    
 }
 
 ADComputeStressTensor::ADComputeStressTensor(const InputParameters &params)
     : FunctorMaterial(params),
-      _grad_x(getFunctor<ADRealVectorValue>("map_x_gradient")),
-      _grad_y(getFunctor<ADRealVectorValue>("map_y_gradient")),
-      _grad_z(getFunctor<ADRealVectorValue>("map_z_gradient")),
-      _lambda(getFunctor<ADReal>("lame_lambda")),
-      _mu(getFunctor<ADReal>("lame_mu")),
-      _m(getFunctor<ADRealVectorValue>("momentum_vector")),
-      _rho(getFunctor<ADReal>("density"))
 
-////////////////////////
+    //obtain the 9 components
+      _X00(getFunctor<ADReal>("X00")),
+      _X01(getFunctor<ADReal>("X01")),
+      _X02(getFunctor<ADReal>("X02")),
+      _X10(getFunctor<ADReal>("X10")),
+      _X11(getFunctor<ADReal>("X11")),
+      _X12(getFunctor<ADReal>("X12")),
+      _X20(getFunctor<ADReal>("X20")),
+      _X21(getFunctor<ADReal>("X21")),
+      _X22(getFunctor<ADReal>("X22")),
+      _lambda(getFunctor<ADReal>("lambda_name")),
+      _mu(getFunctor<ADReal>("mu_name")),
+      _m(getFunctor<ADRealVectorValue>("momentum_vector_name")),
+      _rho(getFunctor<ADReal>("density_name")),
+      _strain_type(getParam<std::string>("strain_type"))
 {   
-    //define a lambda that computes stress
-    auto computeStress = [this](const auto & r, const auto & state) -> ADRankTwoTensor
-    {
-        //retrieve vector components
-        const ADRealVectorValue grad_x = _grad_x(r, state);
-        const ADRealVectorValue grad_y = _grad_y(r, state);
-        const ADRealVectorValue grad_z = _grad_z(r, state);
+
+    //for a lambda that creates stress internally
+    auto computeFullStressTensor = [this](const auto & r, const auto & state) -> ADRankTwoTensor{
+        //obtain individual components of the inverse deformation gradient
+        const ADReal X00 = _X00(r, state);
+        const ADReal X01 = _X01(r, state);
+        const ADReal X02 = _X02(r, state);
+        const ADReal X10 = _X10(r, state);
+        const ADReal X11 = _X11(r, state);
+        const ADReal X12 = _X12(r, state);
+        const ADReal X20 = _X20(r, state);
+        const ADReal X21 = _X21(r, state);
+        const ADReal X22 = _X22(r, state);
+
+        //assemble the full inverse deformation gradient
+        ADRankTwoTensor X;
+        X(0,0) = X00; X(0,1) = X01; X(0,2) = X02;
+        X(1,0) = X10; X(1,1) = X11; X(1,2) = X12;
+        X(2,0) = X20; X(2,1) = X21; X(2,2) = X22;
+
+        //form actual deformation gradient
+        ADRankTwoTensor I; I.setToIdentity();  
+
+        //obtain constants
         const ADReal lambda = _lambda(r, state);
         const ADReal mu = _mu(r, state);
 
-        //initialize the tensor
-        ADRankTwoTensor inv_F;
-        inv_F.zero();
+        ADRankTwoTensor stress;
 
-        //populate tensor
-        for (unsigned int j = 0; j < 3; ++j){
-            inv_F(0,j) = grad_x(j);
-            inv_F(1,j) = grad_y(j);
-            inv_F(2,j) = grad_z(j);
+        if (_strain_type == "small_strain"){
+            ADRankTwoTensor epsilon = 0.5 * (X + X.transpose()) - I;
+
+            //stress from small strain
+            stress = lambda * epsilon.trace() * I + 2 * mu * epsilon;
         }
+        else if (_strain_type == "large_strain"){
 
-        //this is the deformation gradient
-        ADRankTwoTensor F = inv_F.inverse();
-        ADReal J = F.det();
+            //obtain deformation gradient
+            ADRankTwoTensor F = X.inverse();
 
-        //using this, we compute the required lagrangian deformation tensors
-        ADRankTwoTensor C = F.transpose() * F;
-        ADRankTwoTensor I;
-        I.setToIdentity();
+            //compute jacobian of the deformation gradient
+            ADReal J = F.det();
 
-        //form stress
-        ADRankTwoTensor PK2;
-        PK2 = lambda * MetaPhysicL::log(J) * C.inverse() + mu * (I - C.inverse());
+            //compute right cauchy green deformation tensor
+            ADRankTwoTensor Cinv = X * X.transpose();
+            
+            //compute second piola
+            ADRankTwoTensor PK2;
+            PK2 = lambda * MetaPhysicL::log(MetaPhysicL::max(J, 1e-6)) * Cinv + mu * (I - Cinv);
 
-        //form sigma
-        ADRankTwoTensor sigma = (1. / J) * (F * PK2 * F.transpose());
-        return sigma;
+            //compute cauchy stress
+            stress = (1. / J) * F * PK2 * F.transpose();
+        }
+        else {
+            mooseError("Strain has to be either large_strain (defualt), or small strain !!");
+        }
+        return - stress;
     };
+
+    addFunctorProperty<ADRealVectorValue>(getParam<MooseFunctorName>("stress_col1_name"),
+        [this, computeFullStressTensor](const auto & r, const auto & state) -> ADRealVectorValue{
+            //call the full stress tensor calculation
+            const ADRankTwoTensor sigma = computeFullStressTensor(r, state);
+
+            //define the vector
+            ADRealVectorValue col1;
+            for (unsigned int i = 0; i < 3; ++i){
+                col1(i) = sigma(i, 0);
+            }
+            return col1;
+        });
+
+    addFunctorProperty<ADRealVectorValue>(getParam<MooseFunctorName>("stress_col2_name"),
+        [this, computeFullStressTensor](const auto & r, const auto & state) -> ADRealVectorValue{
+            //call the full stress tensor calculation
+            const ADRankTwoTensor sigma = computeFullStressTensor(r, state);
+
+            //define the vector
+            ADRealVectorValue col2;
+            for (unsigned int i = 0; i < 3; ++i){
+                col2(i) = sigma(i, 1);
+            }
+            return col2;
+        });
+
+    addFunctorProperty<ADRealVectorValue>(getParam<MooseFunctorName>("stress_col3_name"),
+        [this, computeFullStressTensor](const auto & r, const auto & state) -> ADRealVectorValue{
+            //call the full stress tensor calculation
+            const ADRankTwoTensor sigma = computeFullStressTensor(r, state);
+
+            //define the vector
+            ADRealVectorValue col3;
+            for (unsigned int i = 0; i < 3; ++i){
+                col3(i) = sigma(i, 2);
+            }
+            return col3;
+        });
+
+    //now compute the full mechanical flux tensor and then expose components
     
-    addFunctorProperty<ADRealVectorValue>(
-        getParam<MooseFunctorName>("stress_x_name"),
-        [computeStress](const auto & r, const auto & state) -> ADRealVectorValue{
-            //provide only component in x of stress tensor => vector
-            const ADRankTwoTensor sigma_full = computeStress(r, state);
+    //first, internally compute a full tensor
+    auto computeMechanicalFluxTensor = [this, computeFullStressTensor](const auto & r, const auto & state) -> ADRankTwoTensor{
+        //obtain the full stress tensor
+        const ADRankTwoTensor sigma = computeFullStressTensor(r, state);
 
-            //obtain only directional components
-            ADRealVectorValue sigma_x;
-            for (unsigned int j = 0; j < 3; ++j){
-                sigma_x(j) = sigma_full(0,j);
-            }
-            return sigma_x;
-            //
-        }
-    );
-
-    addFunctorProperty<ADRealVectorValue>(
-        getParam<MooseFunctorName>("stress_y_name"),
-        [computeStress](const auto & r, const auto & state) -> ADRealVectorValue{
-            //provide only component in y of stress tensor => vector
-            const ADRankTwoTensor sigma_full = computeStress(r, state);
-
-            //obtain only directional components
-            ADRealVectorValue sigma_y;
-            for (unsigned int j = 0; j < 3; ++j){
-                sigma_y(j) = sigma_full(1,j);
-            }
-            return sigma_y;
-            //
-        }
-    );
-
-    addFunctorProperty<ADRealVectorValue>(
-        getParam<MooseFunctorName>("stress_z_name"),
-        [computeStress](const auto & r, const auto & state) -> ADRealVectorValue{
-            //provide only component in z of stress tensor => vector
-            const ADRankTwoTensor sigma_full = computeStress(r, state);
-
-            //obtain only directional components
-            ADRealVectorValue sigma_z;
-            for (unsigned int j = 0; j < 3; ++j){
-                sigma_z(j) = sigma_full(2,j);
-            }
-            return sigma_z;
-            //
-        }
-    );
-
-    //now we can compute the mechanical flux tensor
-    auto computeReynoldsTensor = [this, computeStress](const auto & r, const auto & state) -> ADRankTwoTensor
-    {
-        //obtain velocity vector
+        //obtain the momentum vector
         const ADRealVectorValue m = _m(r, state);
         const ADReal rho = _rho(r, state);
 
-        //form initial term
-        ADRankTwoTensor mcrossm;
-        mcrossm.zero();
+        //compute the tensor
 
+        ADRankTwoTensor T;
         for (unsigned int i = 0; i < 3; ++i){
             for (unsigned int j = 0; j < 3; ++j){
-                mcrossm(i,j) = m(i) * m(j) / rho;
+                T(i,j) = m(i) * m(j) / rho;
+                T(i,j) -= sigma(i,j);
             }
         }
-
-        //subtract stress
-        const ADRankTwoTensor stress_full = computeStress(r, state);
-
-        ADRankTwoTensor T = mcrossm - stress_full;
         return T;
     };
 
-    //use the formed total tensor to expose the vector components for each direction
+    //now declare the rows using this internal lambda
+    addFunctorProperty<ADRealVectorValue>(getParam<MooseFunctorName>("T_row1_name"),
+        [this, computeMechanicalFluxTensor](const auto & r, const auto & state) -> ADRealVectorValue{
+            // //call the full mechanical flux tensor
+            const ADRankTwoTensor T = computeMechanicalFluxTensor(r, state);
 
-    addFunctorProperty<ADRealVectorValue>(
-        getParam<MooseFunctorName>("T_x_name"),
-        [computeReynoldsTensor](const auto & r, const auto & state) -> ADRealVectorValue
-        {
-            //retrieve tensor
-            const ADRankTwoTensor T_full = computeReynoldsTensor(r, state);
-
-            //declare direction 
-            ADRealVectorValue T_x;
-            T_x.zero();
-
-            //form x component
+            //declare and populate first row
+            ADRealVectorValue row1;
             for (unsigned int j = 0; j < 3; ++j){
-                T_x(j) = T_full(0,j);
+                row1(j) = T(0,j);
             }
-            return T_x;
-        }
-    );
+            return row1;
+        });
 
-    addFunctorProperty<ADRealVectorValue>(
-        getParam<MooseFunctorName>("T_y_name"),
-        [computeReynoldsTensor](const auto & r, const auto & state) -> ADRealVectorValue
-        {
-            //retrieve tensor
-            const ADRankTwoTensor T_full = computeReynoldsTensor(r, state);
+    addFunctorProperty<ADRealVectorValue>(getParam<MooseFunctorName>("T_row2_name"),
+        [this, computeMechanicalFluxTensor](const auto & r, const auto & state) -> ADRealVectorValue{
+            //call the full mechanical flux tensor
+            const ADRankTwoTensor T = computeMechanicalFluxTensor(r, state);
 
-            //declare direction 
-            ADRealVectorValue T_y;
-            T_y.zero();
-
-            //form x component
+            //declare and populate first row
+            ADRealVectorValue row2;
             for (unsigned int j = 0; j < 3; ++j){
-                T_y(j) = T_full(1,j);
+                row2(j) = T(1,j);
             }
-            return T_y;
-        }
-    );
+            return row2;
+        });
 
-    addFunctorProperty<ADRealVectorValue>(
-        getParam<MooseFunctorName>("T_z_name"),
-        [computeReynoldsTensor](const auto & r, const auto & state) -> ADRealVectorValue
-        {
-            //retrieve tensor
-            const ADRankTwoTensor T_full = computeReynoldsTensor(r, state);
+    addFunctorProperty<ADRealVectorValue>(getParam<MooseFunctorName>("T_row3_name"),
+        [this, computeMechanicalFluxTensor](const auto & r, const auto & state) -> ADRealVectorValue{
+            //call the full mechanical flux tensor
+            const ADRankTwoTensor T = computeMechanicalFluxTensor(r, state);
 
-            //declare direction 
-            ADRealVectorValue T_z;
-            T_z.zero();
-
-            //form x component
+            //declare and populate first row
+            ADRealVectorValue row3;
             for (unsigned int j = 0; j < 3; ++j){
-                T_z(j) = T_full(2,j);
+                row3(j) = T(2,j);
             }
-            return T_z;
-        }
-    );
+            return row3;
+        });
 }
