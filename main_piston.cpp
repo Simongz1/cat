@@ -1,5 +1,4 @@
 #include <iostream>
-//call the particle definition
 #include "particle.cpp"
 #include <array>
 #include <algorithm>
@@ -8,12 +7,11 @@
 #include <cstdlib>
 #include <fstream>
 #include <string>
+
 using namespace std;
 
+using Force = std::array<float, 2>;
 constexpr float pi = 3.14159265358979323846f;
-
-//define a particle initialization function
-//this function takes as input the grid parameters and outputs a container of particles
 
 struct Lattice {
     std::vector<particle> particles;
@@ -21,8 +19,7 @@ struct Lattice {
 };
 
 struct ModelParameters {
-    bool use_prescribed_piston = false;
-    float stiffness = 1000.0f;
+    float stiffness = 70.0f;
     float piston_velocity = -4.0f;
     float piston_ramp_time = 0.08f;
     bool use_roller_boundaries = true;
@@ -91,11 +88,6 @@ Lattice initialize_particles(
                 continue;
             }
 
-            if (i == nx - 1){
-                p.vx = -1000.0f;
-                p.vx_old = p.vx;
-            }
-
             p.x_old = p.x;
             p.y_old = p.y;
             p.x_ref = p.x;
@@ -124,10 +116,6 @@ float clamp_value(float value, float min_value, float max_value){
     return value;
 }
 
-//define a simple repulsion function for interparticle forces
-
-using Force = std::array<float, 2>;
-
 void add_spring_force(
     std::vector<Force>& forces,
     const std::vector<particle>& particles,
@@ -136,7 +124,7 @@ void add_spring_force(
     float rest_length,
     float stiffness
 ){
-    constexpr float minimum_distance = 1e-6;
+    constexpr float minimum_distance = 1.0e-3f;
 
     const float dx = particles[a].x - particles[b].x;
     const float dy = particles[a].y - particles[b].y;
@@ -245,10 +233,6 @@ void apply_boundary_conditions(
     int ny,
     const ModelParameters& model
 ){
-    if (!model.use_prescribed_piston){
-        return;
-    }
-
     const float piston_velocity = ramped_piston_velocity(time, model);
     const float displacement = piston_displacement(time, model);
 
@@ -282,10 +266,8 @@ void apply_boundary_conditions(
     }
 }
 
-//define a simple leap frog integration for particle motion
-
 void leapfrog(
-    std::vector<particle> &particles,
+    std::vector<particle>& particles,
     const std::vector<int>& grid_to_particle,
     float dt,
     float ymax,
@@ -298,37 +280,31 @@ void leapfrog(
     float y_spacing,
     float time,
     const ModelParameters& model,
-    float &KE
+    float& KE
 ){
-    //evaliate acceleration
     const std::vector<Force> forces = interactions(particles, grid_to_particle, nx, ny, x_spacing, y_spacing, model);
 
-    //compute acceleration as F / m = a
     for (unsigned int i = 0; i < particles.size(); ++i){
         particle& current_particle = particles[i];
 
         current_particle.ax = forces[i][0] / current_particle.m;
         current_particle.ay = forces[i][1] / current_particle.m;
 
-        //update velocity
         current_particle.vx = current_particle.vx_old + 0.5f * dt * (current_particle.ax + current_particle.ax_old);
         current_particle.vy = current_particle.vy_old + 0.5f * dt * (current_particle.ay + current_particle.ay_old);
 
-        //update position
         current_particle.x = current_particle.x_old + dt * current_particle.vx + 0.5f * current_particle.ax * dt * dt;
         current_particle.y = current_particle.y_old + dt * current_particle.vy + 0.5f * current_particle.ay * dt * dt;
 
-        // Reflect particles that cross the top or bottom boundary.
-        if (current_particle.y >= ymax){
+        if (current_particle.y > ymax){
             current_particle.y = ymax - (current_particle.y - ymax);
             current_particle.vy *= -1.0f;
         }
-        else if (current_particle.y <= ymin){
+        else if (current_particle.y < ymin){
             current_particle.y = ymin + (ymin - current_particle.y);
             current_particle.vy *= -1.0f;
         }
 
-        // Reflect particles that cross the left and right boundary.
         if (current_particle.x > xmax){
             current_particle.x = xmax - (current_particle.x - xmax);
             current_particle.vx *= -1.0f;
@@ -338,142 +314,60 @@ void leapfrog(
             current_particle.vx *= -1.0f;
         }
 
-        //compute the total kinetic energy
-
         KE += 0.5f * current_particle.m * (current_particle.vx * current_particle.vx + current_particle.vy * current_particle.vy);
-        
-        //update old values
+
         current_particle.x_old = current_particle.x;
         current_particle.y_old = current_particle.y;
-
         current_particle.vx_old = current_particle.vx;
         current_particle.vy_old = current_particle.vy;
-
         current_particle.ax_old = current_particle.ax;
         current_particle.ay_old = current_particle.ay;
     }
 
     apply_boundary_conditions(particles, time + dt, nx, ny, model);
 
-    float avg_KE = KE / particles.size();
+    const float avg_KE = KE / particles.size();
     std::cout << "Current kinetic energy " << avg_KE << " for " << particles.size() << " particles " << std::endl;
-
 }
 
 int main(int argc, char* argv[]){
-    if (argc < 9 || argc > 14){
+    if (argc != 9 && argc != 10 && argc != 11){
         std::cerr << "Usage: " << argv[0]
-                  << " xmin xmax nx ymin ymax ny dt nsteps [solid|hole]"
-                  << " [hole_radius] [free|piston] [piston_velocity] [piston_ramp_time]" << std::endl;
+                  << " xmin xmax nx ymin ymax ny dt nsteps [solid|hole] [hole_radius]" << std::endl;
         return 1;
     }
 
-    //define domain size
     const float xmin = std::stof(argv[1]);
     const float xmax = std::stof(argv[2]);
     const int nx = std::stoi(argv[3]);
-
     const float ymin = std::stof(argv[4]);
     const float ymax = std::stof(argv[5]);
     const int ny = std::stoi(argv[6]);
-
     const float dt = std::stof(argv[7]);
     const int nsteps = std::stoi(argv[8]);
-    int next_arg = 9;
-    std::string geometry = "solid";
-    if (argc > next_arg){
-        geometry = argv[next_arg];
-        ++next_arg;
-    }
-
-    std::cout << "Domain x-range: " << xmin << ", " << xmax << std::endl;
-    std::cout << "Domain y-range: " << ymin << ", " << ymax << std::endl;
-    std::cout << "Running " << nsteps << " integration steps with dt = " << dt << std::endl;
+    const std::string geometry = argc >= 10 ? argv[9] : "solid";
 
     const float x_spacing = axis_spacing(xmin, xmax, nx);
     const float y_spacing = axis_spacing(ymin, ymax, ny);
     const float default_hole_radius = 0.15f * std::min(xmax - xmin, ymax - ymin);
-    float hole_radius = default_hole_radius;
-    if (geometry == "hole" && argc > next_arg){
-        const std::string candidate = argv[next_arg];
-        if (candidate != "free" && candidate != "piston"){
-            hole_radius = std::stof(candidate);
-            ++next_arg;
-        }
-    }
-
-    ModelParameters model;
-    std::string boundary_mode = "free";
-    if (argc > next_arg){
-        boundary_mode = argv[next_arg];
-        ++next_arg;
-    }
-
-    if (boundary_mode == "piston"){
-        model.use_prescribed_piston = true;
-        if (argc > next_arg){
-            model.piston_velocity = std::stof(argv[next_arg]);
-            ++next_arg;
-        }
-        if (argc > next_arg){
-            model.piston_ramp_time = std::stof(argv[next_arg]);
-            ++next_arg;
-        }
-    }
-
-    std::cout << "Particle spacing x: " << x_spacing << std::endl;
-    std::cout << "Particle spacing y: " << y_spacing << std::endl;
-    std::cout << "Geometry: " << geometry << std::endl;
-    if (geometry == "hole"){
-        std::cout << "Hole radius: " << hole_radius << std::endl;
-    }
+    const float hole_radius = argc == 11 ? std::stof(argv[10]) : default_hole_radius;
 
     if (geometry != "solid" && geometry != "hole"){
         std::cerr << "Unsupported geometry: " << geometry << std::endl;
         return 1;
     }
 
-    if (boundary_mode != "free" && boundary_mode != "piston"){
-        std::cerr << "Unsupported boundary mode: " << boundary_mode << std::endl;
-        return 1;
-    }
-
-    if (next_arg != argc){
-        std::cerr << "Too many arguments provided." << std::endl;
-        return 1;
-    }
-
-    std::cout << "Boundary mode: " << boundary_mode << std::endl;
-    if (model.use_prescribed_piston){
-        std::cout << "Piston velocity: " << model.piston_velocity << std::endl;
-        std::cout << "Piston ramp time: " << model.piston_ramp_time << std::endl;
-    }
-
+    const ModelParameters model;
     Lattice lattice = initialize_particles(xmin, xmax, nx, ymin, ymax, ny, geometry, hole_radius);
     std::vector<particle>& particles = lattice.particles;
 
-    std::cout << "Initialized " << particles.size() << " particles" << std::endl;
+    apply_boundary_conditions(particles, 0.0f, nx, ny, model);
 
-    if (model.use_prescribed_piston){
-        for (particle& p : particles){
-            if (is_right_boundary_particle(p, nx, ny)){
-                p.vx = 0.0f;
-                p.vx_old = 0.0f;
-            }
-        }
-        apply_boundary_conditions(particles, 0.0f, nx, ny, model);
-    }
+    std::ofstream positions("positions_piston.csv");
 
-    //generate file container
-    std::ofstream positions;
-    positions.open("positions.csv");
-
-    //iterate over time steps
     for (int t = 0; t < nsteps; ++t){
-        //plot information to console
-
         std::cout << "STEP " << t << " EXECUTING INTEGRATION" << std::endl;
-        float KE = 0.0;
+        float KE = 0.0f;
         const float time = t * dt;
 
         leapfrog(
@@ -492,22 +386,24 @@ int main(int argc, char* argv[]){
             model,
             KE
         );
-        //append column names as first row
+
         if (t == 0){
             positions << "time,x,y,vmag,KE" << std::endl;
         }
 
-        //save locations on file
         for (unsigned int i = 0; i < particles.size(); ++i){
-            //compute velocity magnitude
-            float vx = particles[i].vx;
-            float vy = particles[i].vy;
-            float mag = std::sqrt(vx * vx + vy * vy);
+            const float vx = particles[i].vx;
+            const float vy = particles[i].vy;
+            const float mag = std::sqrt(vx * vx + vy * vy);
 
-            positions << time + dt << "," << particles[i].x << "," << particles[i].y << "," << mag << "," << KE / particles.size() << std::endl;
+            positions << time + dt << ","
+                      << particles[i].x << ","
+                      << particles[i].y << ","
+                      << mag << ","
+                      << KE / particles.size()
+                      << std::endl;
         }
     }
-    positions.close();
 
     return 0;
 }

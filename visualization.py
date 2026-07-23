@@ -10,8 +10,8 @@ data = np.genfromtxt(csv_path, delimiter=",", names=True)
 
 # Animation settings.
 output_path = Path(__file__).with_name("particles.mp4")
-fps = 30
-frame_stride = 5  # Set to 1 to include every recorded timestep.
+fps = 10
+frame_stride = 50  # Set to 1 to include every recorded timestep.
 
 all_times = data["time"]
 frame_times = np.unique(all_times)[::frame_stride]
@@ -41,8 +41,8 @@ fig, ax = plt.subplots()
 particles = ax.scatter(
     initial_frame["x"],
     initial_frame["y"],
-    c=initial_frame["vmag"],
-    s=40,
+    c=initial_frame["KE"],
+    s=5,
     cmap="viridis",
     vmin=speed_min,
     vmax=speed_max,
