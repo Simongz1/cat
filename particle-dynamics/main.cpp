@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <unordered_map>
 using namespace std;
 
 constexpr float pi = 3.14159265358979323846f;
@@ -22,10 +23,12 @@ struct Lattice {
 
 struct ModelParameters {
     bool use_prescribed_piston = false;
-    float stiffness = 1000.0f;
+    float stiffness = 10.0f;
     float piston_velocity = -4.0f;
     float piston_ramp_time = 0.08f;
     bool use_roller_boundaries = true;
+    float contact_stiffness = 100.0f;
+    float contact_distance_factor = 1.0f;
 };
 
 bool inside_center_hole(
@@ -37,7 +40,7 @@ bool inside_center_hole(
     float ymax,
     float hole_radius
 ){
-    const float x_center = 0.5f * (xmin + xmax);
+    const float x_center = 0.7f * (xmin + xmax);
     const float y_center = 0.5f * (ymin + ymax);
     const float dx = x - x_center;
     const float dy = y - y_center;
@@ -157,6 +160,114 @@ void add_spring_force(
     forces[b][1] -= fy;
 }
 
+struct Cell {
+    int x;
+    int y;
+
+    bool operator==(const Cell& other) const {
+        return x == other.x && y == other.y;
+    }
+};
+
+struct CellHash {
+    std::size_t operator()(const Cell& cell) const {
+        const std::size_t hx = std::hash<int>{}(cell.x);
+        const std::size_t hy = std::hash<int>{}(cell.y);
+        return hx ^ (hy + 0x9e3779b9U + (hx << 6) + (hx >> 2));
+    }
+};
+
+void add_contact_force(
+    std::vector<Force>& forces,
+    const std::vector<particle>& particles,
+    int a,
+    int b,
+    float contact_distance,
+    float contact_stiffness
+){
+    float dx = particles[a].x - particles[b].x;
+    float dy = particles[a].y - particles[b].y;
+    const float distance = std::sqrt(dx * dx + dy * dy);
+
+    if (distance >= contact_distance){
+        return;
+    }
+
+    // At exact overlap, use the particles' original separation to define
+    // a stable direction instead of silently dropping the contact force.
+    constexpr float minimum_distance = 1e-8f;
+    float direction_length = distance;
+    if (direction_length <= minimum_distance){
+        dx = particles[a].x_ref - particles[b].x_ref;
+        dy = particles[a].y_ref - particles[b].y_ref;
+        direction_length = std::sqrt(dx * dx + dy * dy);
+        if (direction_length <= minimum_distance){
+            dx = 1.0f;
+            dy = 0.0f;
+            direction_length = 1.0f;
+        }
+    }
+
+    const float magnitude =
+        contact_stiffness * (contact_distance - distance);
+    const float fx = magnitude * dx / direction_length;
+    const float fy = magnitude * dy / direction_length;
+
+    forces[a][0] += fx;
+    forces[a][1] += fy;
+    forces[b][0] -= fx;
+    forces[b][1] -= fy;
+}
+
+void add_particle_contacts(
+    std::vector<Force>& forces,
+    const std::vector<particle>& particles,
+    float contact_distance,
+    float contact_stiffness
+){
+    if (contact_distance <= 0.0f || contact_stiffness <= 0.0f){
+        return;
+    }
+
+    // Each cell is one cutoff wide, so possible contacts can only occur in
+    // the particle's own cell or one of its eight neighboring cells.
+    std::unordered_map<Cell, std::vector<int>, CellHash> cells;
+    cells.reserve(particles.size());
+
+    for (int index = 0; index < static_cast<int>(particles.size()); ++index){
+        const Cell cell{
+            static_cast<int>(std::floor(particles[index].x / contact_distance)),
+            static_cast<int>(std::floor(particles[index].y / contact_distance))
+        };
+
+        for (int offset_x = -1; offset_x <= 1; ++offset_x){
+            for (int offset_y = -1; offset_y <= 1; ++offset_y){
+                const Cell neighbor_cell{
+                    cell.x + offset_x,
+                    cell.y + offset_y
+                };
+                const auto neighbor = cells.find(neighbor_cell);
+                if (neighbor == cells.end()){
+                    continue;
+                }
+
+                for (const int other : neighbor->second){
+                    add_contact_force(
+                        forces,
+                        particles,
+                        index,
+                        other,
+                        contact_distance,
+                        contact_stiffness
+                    );
+                }
+            }
+        }
+
+        cells[cell].push_back(index);
+    }
+}
+
 std::vector<Force> interactions(
     const std::vector<particle>& particles,
     const std::vector<int>& grid_to_particle,
@@ -207,6 +318,15 @@ std::vector<Force> interactions(
             }
         }
     }
+
+    const float contact_distance =
+        model.contact_distance_factor * std::min(x_spacing, y_spacing);
+    add_particle_contacts(
+        forces,
+        particles,
+        contact_distance,
+        model.contact_stiffness
+    );
 
     return forces;
 }

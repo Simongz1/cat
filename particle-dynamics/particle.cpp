@@ -7,6 +7,6 @@ struct particle {
     float x_ref = 0.0f, y_ref = 0.0f;
     float Fxx = 1.0f, Fxy = 0.0f, Fyx = 0.0f, Fyy = 1.0f;
     float J = 1.0f;
-    float m = 1;
+    float m = 1000e-6;
     int body_id = 0;
 };
