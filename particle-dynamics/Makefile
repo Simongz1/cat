@@ -1,17 +1,28 @@
 CXX ?= c++
 CXXFLAGS ?= -O2 -std=c++14 -Wall -Wextra -pedantic
+CPPFLAGS ?= -I/opt/homebrew/opt/eigen/include/eigen3
 
-.PHONY: all clean hydrodynamics
+.PHONY: all clean hydrodynamics tensor stress
 
-all: hydrodynamics piston
+all: hydrodynamics piston tensor
 
 hydrodynamics: particle_sim
 
 particle_sim: main.cpp particle.cpp
-	$(CXX) $(CXXFLAGS) main.cpp -o particle_sim
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) main.cpp -o particle_sim
 
 piston: main_piston.cpp particle.cpp
-	$(CXX) $(CXXFLAGS) main_piston.cpp -o piston
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) main_piston.cpp -o piston
+
+tensor: matrix_base.o
+
+matrix_base.o: matrix_base.cpp
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c matrix_base.cpp -o matrix_base.o
+
+stress: stress_base.o
+
+stress_base.o: stress_base.cpp particle_base.cpp matrix_base.cpp
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c stress_base.cpp -o stress_base.o
 
 clean:
 	rm -f particle_sim piston *.o
