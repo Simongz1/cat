@@ -10,8 +10,15 @@
 #include <string>
 #include <unordered_map>
 #include <Eigen/Dense>
+#include <Eigen/Sparse>
+#include "geometry.cpp"
 using namespace std;
 using namespace Eigen;
+using SpIndex = Eigen::Index;
+
+//sparse matrix alias
+
+using ParticleSparseMatrix = Eigen::SparseMatrix<float, Eigen::RowMajor>;
 
 struct ModelParameters {
     bool use_prescribed_piston = false;
@@ -21,6 +28,13 @@ struct ModelParameters {
     bool use_roller_boundaries = true;
     float contact_stiffness = 100.0f;
     float contact_distance_factor = 1.0f;
+};
+
+struct SimulationParameters {
+    const float dt = 1e-2;
+    const float ti = 0.0;
+    const float tf = 100.0;
+    const float interactionRadius = 0.05;
 };
 
 //matrix based solver.
@@ -33,39 +47,43 @@ struct ModelParameters {
 //define a function to compute interaction radius
 void updateDistanceMatrix(
     const float interactionRadius,
-    const std::vector<particle> &particles,
-    Matrix<float, sizeof(particles), sizeof(particles)> &distanceMatrix,
-    Matrix<float, sizeof(particles), sizeof(particles)> &distanceMatrixOld
-){
-    //obtain the current location for each particle
-    for (unsigned int i = 0; i < sizeof(particles); ++i){
-        for (unsigned int j = i + 1; j < sizeof(particles); ++j){
-            //extract particle i and j
-            particle particle_i = particles[i];
-            particle particle_j = particles[j];
+    std::vector<particle> &particles,
+    ParticleSparseMatrix &distanceMatrix,
+    ParticleSparseMatrix &distanceMatrixOld
+){  
+    for (unsigned int i = 0; i < particles.size(); ++i){
+        for (unsigned int j = i + 1; j < particles.size(); ++j){
+            //define current and old entries
+            std::vector<Eigen::Triplet<float>> currentInteracting;
+            std::vector<Eigen::Triplet<float>> oldInteracting;
 
-            //obtain the distance as the norm of the difference in current positions
-            Matrix<float, 3 ,1> dx = particle_i.x - particle_j.x;
+            //compute the actual differences
+            Eigen::Vector3f currentDifference = particles[j].x - particles[i].x;
+            Eigen::Vector3f oldDifference = particles[j].x_old - particles[i].x_old;
 
-            //compute the norm
-            float dx_norm = dx.norm();
+            //compute norms
+            float currentDistance = currentDifference.norm();
+            float oldDistance = oldDifference.norm();
 
-            //save value in symmetric matrix
-            distanceMatrix(i, j) = dx_norm;
+            //check for interaction
+            if (currentDistance < interactionRadius){
+                //normalize
+                float normalizedCurrentDistance = currentDistance / interactionRadius;
+                float normalizedOldDistance = oldDistance / interactionRadius;
 
-            //set to zero particles that are outside of the interaction radius
-            distanceMatrix(j, i) = distanceMatrix(i, j);
+                //append to interacting list
+                currentInteracting.emplace_back(i, j, normalizedCurrentDistance);
+                currentInteracting.emplace_back(j, i, normalizedCurrentDistance);
 
-            //repeat for the old distance matrix
+                oldInteracting.emplace_back(i, j, normalizedOldDistance);
+                oldInteracting.emplace_back(j, i, normalizedOldDistance);
 
-            Matrix<float, 3, 1> dx_old = particle_i.x_old - particle_j.x_old;
-            float dx_old_norm = dx_old.norm();
-            distanceMatrixOld(i, j) = dx_old_norm; 
-            distanceMatrixOld(j, i) = distanceMatrixOld(i, j);
+                std::cout << "Particles " << i << " and " << j << " are interacting";
+            }
 
-            //normalize the matrix by the interaction radius
-            distanceMatrix(i, j) *= 1.0 / interactionRadius;
-            distanceMatrixOld(i, j) *= 1.0 / interactionRadius;
+            //set values on sparse matrix
+            distanceMatrix.setFromTriplets(currentInteracting.begin(), currentInteracting.end());
+            distanceMatrixOld.setFromTriplets(oldInteracting.begin(), oldInteracting.end());
         }
     }
 }
@@ -73,42 +91,103 @@ void updateDistanceMatrix(
 //once we have updated the distance matrix, we now approximate the moment matrix
 
 void updateWeights(
-    const std::vector<particle> &particles,
-    const Matrix<float, sizeof(particles), sizeof(particles)> &distanceMatrix,
-    Matrix<float, sizeof(particles), sizeof(particles)> &weightsMatrix
+    std::vector<particle> &particles,
+    const ParticleSparseMatrix &distanceMatrix,
+    ParticleSparseMatrix &weightsMatrix,
+    ParticleSparseMatrix &distanceMatrixOld
 ){
-    //compute weights
-    for (unsigned int i = 0; i < sizeof(particles); ++i){
-        for(unsigned int j = 0 ; j < sizeof(particles); ++j){
-            weightsMatrix(i, j) = distanceMatrix(i, j) > 1.0f ? std::pow(1.0 - distanceMatrix(i, j), 4) * (1.0 + 4.0 * distanceMatrix(i, j)) : 0.0f;
+    //initialize sparse weight entries
+    std::vector<Eigen::Triplet<float>> weightEntries;
+
+    //iterate over sparse interactions
+    for (Eigen::Index i = 0; i < distanceMatrixOld.outerSize(); ++i){
+        for (ParticleSparseMatrix::InnerIterator entry(distanceMatrixOld, i); entry; ++entry){
+            //form j index
+            Eigen::Index j = entry.col();
+            float q = entry.value();
+
+            //evaluate distance
+            if (q < 1.0f){
+                //form distance kernel
+                float m = 1.0 - q;
+                float w = std::pow(m, 4.0) * (1.0 + 4.0 * m);
+                
+                //append to the tripled the location and weight values
+                weightEntries.emplace_back(i, j, w);
+            }
         }
     }
+
+    weightsMatrix.setFromTriplets(weightEntries.begin(), weightEntries.end());
 }
 
 //now we can define a function that computes the momentum and cross config tensors
 
-void updateMomentumTensor(
-    const std::vector<particle> &particles,
-    const Matrix<float, sizeof(particles), sizeof(particles)> &momentumTensor,
-    const Matrix<float, sizeof(particles), sizeof(particles)> &weightsMatrix,
-    const Matrix<float, sizeof(particles), sizeof(particles)> &distanceMatrixOld
+void updateMomentumTensors(
+    std::vector<particle> &particles,
+    const ParticleSparseMatrix &weightsMatrix,
+    const ParticleSparseMatrix &distanceMatrixOld,
+    const ParticleSparseMatrix &distanceMatrix
 ){
     //compute the momentum tensor for each particle
-    for (unsigned int i = 0; i < sizeof(particles); ++i){
-        particle particle_i = particles[i];
-        Matrix<float, 3, 3> M_i = particle_i.M;
-        for (unsigned int j = i + 1; j < sizeof(particles); ++j){
-            //extract particles
-            
-            particle particle_j = particles[j];
+    //for sparse matrices, we only iterate through recorded index values
 
-            //update the momentum tensor
-            
-            M_i += weightsMatrix(i, j) * distanceMatrixOld(i, j) * distanceMatrixOld(j, i);
+    //sparse indexes
+    for (SpIndex i = 0; i < weightsMatrix.outerSize(); ++i){
+
+        //obtain particle here
+        particle currentParticle = particles[i];
+
+        for (ParticleSparseMatrix::InnerIterator entry(weightsMatrix, i); entry; ++entry){
+
+            //retrieve i, j weight
+            SpIndex j = entry.col();
+            float currentWeight = entry.value();
+
+            //now that we have a nonzero pair, we compute the M and B tensors for particle i and j
+            for (unsigned int k = 0; k < 3; ++k){
+                for (unsigned int l = 0; l < 3; ++l){
+                    currentParticle.M(k, l) += currentWeight * distanceMatrixOld.coeff(i, j) * distanceMatrixOld.coeff(j, i);
+                    currentParticle.B(k, l) += currentWeight * distanceMatrix.coeff(i, j) * distanceMatrixOld.coeff(j, i);
+                }
+            }
         }
     }
 }
 
+//compute the incremental deformation gradient
+void updateIncrementalDeformationGradient(
+    std::vector<particle> &particles
+){
+    for (unsigned int i = 0; i < particles.size(); ++i){
+        particles[i].f = particles[i].B * particles[i].M.inverse();
+        particles[i].F = particles[i].f * particles[i].F_old;
+    }
+}
+
+//once we have the deformation gradient we can compute the 
+
 int main(){
+    //we initially set initial structures
+    GeometricParameters geom;
+    std::vector<particle> particles = initParticles(geom);
+
+    //std::cout << 60 * "=" << std::endl;
+    std::cout << "Generated " << particles.size() << " particles" << std::endl;
+    //std::cout << 60 * "=" << std::endl;
+
+    //create an eigen index
+    Eigen::Index particleCount = static_cast<Eigen::Index>(particles.size());
+
+    //create the matrices
+    ParticleSparseMatrix distanceMatrix(particleCount, particleCount);
+    ParticleSparseMatrix distanceMatrixOld(particleCount, particleCount);
+    ParticleSparseMatrix weightsMatrix(particleCount, particleCount);
+
+    for (unsigned int step = 0; step < int(SimulationParameters().tf / SimulationParameters().dt); ++step){
+        updateDistanceMatrix(0.01, particles, distanceMatrix, distanceMatrixOld);
+        std::cout << "STEP " << step << std::endl;
+    }
+
     return 0;
 }

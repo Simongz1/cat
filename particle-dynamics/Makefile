@@ -19,10 +19,13 @@ tensor: matrix_base.o
 matrix_base.o: matrix_base.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c matrix_base.cpp -o matrix_base.o
 
-stress: stress_base.o
+stress: stress_sim
 
 stress_base.o: stress_base.cpp particle_base.cpp matrix_base.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c stress_base.cpp -o stress_base.o
 
+stress_sim: stress_base.o
+	$(CXX) $(CXXFLAGS) stress_base.o -o stress_sim
+
 clean:
-	rm -f particle_sim piston *.o
+	rm -f particle_sim piston stress_sim *.o
