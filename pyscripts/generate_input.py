@@ -2,39 +2,52 @@ import pandas as pd
 import numpy as np
 import subprocess as su
 from pathlib import Path
+import yaml
+import sys
 
 #provide dataframe with all the data for distributions
-df = pd.read_csv('distributions.csv')
+df = pd.read_csv('./csv/distributions.csv')
+config_path = input('Provide the name of the yaml file: ')
+config_path = Path(config_path)
+
+with config_path.open('r') as f:
+    config = yaml.safe_load(f) or {}
+
+def truthy(value):
+    return value if isinstance(value, bool) else str(value).strip().lower() in {'true', 'yes', 'y', '1'}
+
+def moose_bool(value):
+    return 'true' if truthy(value) else 'false'
 
 #define simulation dimension
-dim = (input('Provide simulation dimension (2D) or (3D): '))
-vel = float(input('Provide impact velocity (km/s): '))
-elemsize = np.array((input('Voxel dimensions in microns for the shock and perpendicular directions: ')).split(','), dtype = float)
-check_frec = int(input('Generate checkpoints every (s): '))
-full_outputs = input('Output all fields? (YES) or (NO): ')
+dim = str(config.get('dim', '2D'))
+vel = float(config.get('vel', 1.75))
+elemsize = np.array(config.get('elemsize', [1.0, 1.9]), dtype=float)
+check_frec = config.get('check_frec', 0.5)
+full_outputs = config.get('full_outputs', 'YES')
 
 #query PBX or random
-pbx = input('Type of microstructure to generate (PBX), (RANDOM) or (LOADED): ')
+pbx = str(config.get('pbx', 'PBX')).upper()
 
 match pbx:
     case 'PBX':
-        particle_sizes = np.array((input('Provide desired particle sizes (microns) for a bimodal distribution: ')).split(','), dtype = float)
-        particle_proportions = np.array((input('Provide fractions of small and big particle sizes: ')).split(','), dtype = float)
-        particle_poro = float(input('Provide particle porosity (%): ')) / 100
+        particle_sizes = np.array(config.get('particle_sizes', [50.0, 50.0]), dtype=float)
+        particle_proportions = np.array(config.get('particle_proportions', [0.5, 0.5]), dtype=float)
+        particle_poro = float(config.get('particle_poro', 1.0)) / 100
         #request RDX density
-        rdx_density = float(input('Provide bulk RDX denisty in kg/m3: '))
-        binder_width = (input('Provide desired binder width (microns): '))
-        binder_range = np.array((input('Provide minimum and maximum microstructure value for binder (0, 92): ')).split(','), dtype = int)
+        rdx_density = float(config.get('rdx_density', 1820))
+        binder_width = config.get('binder_width', 5)
+        binder_range = np.array(config.get('binder_range', [0, 92]), dtype=int)
         particle_range = binder_range
 
         #define the rest of paramters
         bulk_grains = str('true')
-        use_mixture = input('Use mixture for mechanics (true) or (false): ')
-        binder_properties = np.array((input('Provide binder bulk, yield, shear modulus (GPa), and poisson modulus: ')).split(','), dtype = float)
-        
-        tabular_time = input('Use tabular time distribution? (true) or (false): ') #default to value
-        use_distributions = input('Use gaussian time distributions: (true) or (false): ')
-        use_gating = input('Use gating for heat and chemical sources (true) or (false): ')
+        use_mixture = config.get('use_mixture', True)
+        binder_properties = np.array(config.get('binder_properties', [3.0, 0.07, 0.75, 0.35]), dtype=float)
+
+        tabular_time = config.get('tabular_time', False) #default to value
+        use_distributions = config.get('use_distributions', False)
+        use_gating = config.get('use_gating', False)
         loaded_microstructure = str('false')
         datafile = 'a'
 
@@ -63,7 +76,7 @@ match pbx:
         """
         
     case 'RANDOM':
-        range_microstructures = np.array((input('Provide minimum and maximum microstructure ID: ').split(',')), dtype = int)
+        range_microstructures = np.array(config.get('binder_range', [0, 92]), dtype=int)
         particle_sizes = [50, 50] #default
         particle_proportions = [0.5, 0.5] #default
         particle_poro = 0.01 #default
@@ -76,11 +89,11 @@ match pbx:
 
         bulk_grains = str('false') #default
 
-        use_mixture = input('Use mixture for mechanics (true) or (false): ')
-        binder_properties = np.array((input('Provide binder bulk, yield, shear modulus (GPa), and poisson modulus: ')).split(','), dtype = float)
-        tabular_time = input('Use tabular time distribution? (true) or (false): ') #default to value
-        use_distributions = input('Use gaussian time distributions? (true) or (false): ')
-        use_gating = input('Use gating for heat and chemical sources? (true) or (false): ')
+        use_mixture = config.get('use_mixture', False)
+        binder_properties = np.array(config.get('binder_properties', [3.0, 0.08, 3.0, 0.33]), dtype=float)
+        tabular_time = config.get('tabular_time', False) #default to value
+        use_distributions = config.get('use_distributions', False)
+        use_gating = config.get('use_gating', False)
         loaded_microstructure = str('false')
         datafile = 'a'
         
@@ -108,13 +121,13 @@ match pbx:
         """
     
     case 'LOADED':
-        datafile = input('DATA.txt file name without extension: ')
+        datafile = config.get('datafile', 'DATA')
         if (dim == '2D'):
-            zloc = float(input('Provide z location of the slice to extract: '))
-        binder_range = np.array((input('Provide minimum and maximum microstructure value for binder (0, 92): ')).split(','), dtype = int)
+            zloc = float(config.get('zloc', 0.0))
+        binder_range = np.array(config.get('binder_range', [0, 92]), dtype=int)
         range_microstructures = binder_range
         bulk_grains = str('true')
-        rdx_density = float(input('Provide bulk RDX denisty in kg/m3: '))
+        rdx_density = float(config.get('rdx_density', 1820))
         loaded_microstructure = str('true')
 
         particle_sizes = [50, 50] #default
@@ -123,12 +136,12 @@ match pbx:
         binder_width = 5 #default
         particle_range = binder_range
 
-        use_mixture = input('Use mixture for mechanics (true) or (false): ')
-        binder_properties = np.array((input('Provide binder bulk, yield, shear modulus (GPa), and poisson modulus: ')).split(','), dtype = float)
+        use_mixture = config.get('use_mixture', False)
+        binder_properties = np.array(config.get('binder_properties', [3.0, 0.08, 3.0, 0.33]), dtype=float)
 
-        tabular_time = input('Use tabular time distribution? (true) or (false): ') #default to value
-        use_distributions = input('Use gaussian time distributions: (true) or (false): ')
-        use_gating = input('Use gating for heat and chemical sources (true) or (false): ')
+        tabular_time = config.get('tabular_time', False) #default to value
+        use_distributions = config.get('use_distributions', False)
+        use_gating = config.get('use_gating', False)
 
         #define block for function and variable
         block_function = """
@@ -158,7 +171,7 @@ match pbx:
         """
 
 #request complete burn
-complete_burn = input('Use complete burn model? (true) or (false): ')
+complete_burn = config.get('complete_burn', False)
 
 #template block for unreacted
 block_temp_unreacted = """  
@@ -209,9 +222,9 @@ final = final.replace("{BINDER_POISSON}", str(binder_poisson))
 
 #replace the rest here
 final = final.replace("{BULK_GRAINS}", bulk_grains)
-final = final.replace("{USE_MIXTURE}", str(use_mixture))
-final = final.replace("{TABULAR_TIME}", tabular_time)
-final = final.replace("{DISTRIBUTIONS}", str(use_distributions))
+final = final.replace("{USE_MIXTURE}", moose_bool(use_mixture))
+final = final.replace("{TABULAR_TIME}", moose_bool(tabular_time))
+final = final.replace("{DISTRIBUTIONS}", moose_bool(use_distributions))
 final = final.replace("{PARTICLE_RANGE_SMALL}", str(particle_range[0]))
 final = final.replace("{PARTICLE_RANGE_LARGE}", str(particle_range[-1]))
 final = final.replace("{BINDER_RANGE_SMALL}", str(binder_range[0]))
@@ -222,31 +235,32 @@ final = final.replace("{BINDER_WIDTH}", str(binder_width))
 final = final.replace("{SMALL_PROPORTION}", str(particle_proportions[0]))
 final = final.replace("{BIG_PROPORTION}", str(particle_proportions[-1]))
 final = final.replace("{POROSITY}", str(particle_poro))
-final = final.replace("{USE_GATING}", str(use_gating))
+final = final.replace("{USE_GATING}", moose_bool(use_gating))
 
 #new
 final = final.replace("{LOADED_MICROSTRUCTURE}", str(loaded_microstructure))
-final = final.replace("{COMPLETE_BURN}", str(complete_burn))
+final = final.replace("{COMPLETE_BURN}", moose_bool(complete_burn))
 final = final.replace("{MICROSTRUCTURE_FUNCTION}", block_function.format(datafile=str(datafile)))
 final = final.replace("{MICROSTRUCTURE_VARIABLE}", block_variable)
 final = final.replace("{MICROSTRUCTURE_IC}", block_IC)
 final = final.replace("{SHOCKDIR}", str(elemsize[0]))
 final = final.replace("{{FREC}}", str(check_frec))
-final = final.replace("{OUTPUTS}", str('outputs = exodus') if full_outputs == 'YES' else str('#nothing'))
+final = final.replace("{OUTPUTS}", 'outputs = exodus' if truthy(full_outputs) else '#nothing')
 
 #bulk RDX density
 final = final.replace("{BULK_DENSITY}", str(rdx_density))
 
 #check for scaled time to react
-scale_tau = float(input('Scaling factor for time to homogenization. Defaults to 1: '))
+scale_tau = float(config.get('scale_tau', 1.0))
 final = final.replace("{SCALING_TAU}", str(scale_tau))
 
 #query custom us-up relation
-use_custom_usup = input('Use custo us-up coefficients? will defaul to a 3rd degree polynomial (YES) or (NO): ')
+use_custom_usup = config.get('use_custom_usup', 'NO')
+string_us_up = ''
 
 if (use_custom_usup == 'YES'):
     #query for us-up coefficients for polynomial
-    coefficients = np.array(input('Provide coefficients for the polynomial us-up relation from high to low degree: ').split(','), dtype = float)
+    coefficients = np.array(config.get('usup_coeffs', []), dtype=float)
     ##form the string for us-up relation
     string_us_up = ""
     #add the rest
@@ -257,14 +271,14 @@ if (use_custom_usup == 'YES'):
 final = final.replace("{USUP_COEFFS}", str(f"us_up_coeffs = '{string_us_up}'") if use_custom_usup == 'YES' else str('#defaultusup'))
 
 #query compression sign
-compression_sign = int(input('Provide sign of positive compression (1) or (-1): '))
+compression_sign = int(config.get('compression_sign', 1))
 final = final.replace("{COMPRESSION_SIGN}", str(f"compression_sign = {compression_sign}"))
 
 #for mesh generation
 match dim:
     case '2D':
-        elem_shock_dir = int(input('Provide element count along shock direction: '))
-        elem_perp_1 = int(input('Provide element count perpendicular to shock direction: '))
+        elem_shock_dir = int(config.get('elem_shock_dir', 300))
+        elem_perp_1 = int(config.get('elem_perp_1', 80))
         elem_perp_2 = 1
 
         #format and replace
@@ -286,8 +300,8 @@ match dim:
         final = final.replace("{ZMIN}", repl)
 
     case '3D':
-        elem_shock_dir = int(input('Provide element count along shock direction: '))
-        elem_perp_1 = int(input('Provide element count perpendicular to shock direction: '))
+        elem_shock_dir = int(config.get('elem_shock_dir', 300))
+        elem_perp_1 = int(config.get('elem_perp_1', 80))
         elem_perp_2 = elem_perp_1 #square cross section
 
         final = final.replace("{ELEM_PERP_1}", str(elem_perp_1))
@@ -308,16 +322,16 @@ match dim:
 
 #define name for the loaded microstructures
 #query for custom name if needed
-custom_name = input('Provide a custom name for the directory and input / output files? (YES) or (NO): ')
+custom_name = config.get('custom_name', 'NO')
 
-if (custom_name == 'YES'):
-    final_name = input('Enter the custom name as a string with no spaces: ')
+if truthy(custom_name):
+    final_name = config.get('name', f'{dim}_run')
 
 elif (pbx == 'LOADED'):
-    final_name = f"loaded_{datafile}_slice{zloc}_{dim}_up{vel}_perp{elem_perp_1}_shock{elem_shock_dir}_time{'distr' if use_distributions == 'true' else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}"
+    final_name = f"loaded_{datafile}_slice{zloc}_{dim}_up{vel}_perp{elem_perp_1}_shock{elem_shock_dir}_time{'distr' if truthy(use_distributions) else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}"
 
 else:
-    final_name = f"{dim}_up{vel}_type{pbx}_perp{elem_perp_1}_shock{elem_shock_dir}_poro{particle_poro if pbx == 'PBX' else 0}_time{'distr' if use_distributions == 'true' else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}" 
+    final_name = f"{dim}_up{vel}_type{pbx}_perp{elem_perp_1}_shock{elem_shock_dir}_poro{particle_poro if pbx == 'PBX' else 0}_time{'distr' if truthy(use_distributions) else 'tabular'}_binder{binder_width}_{int(binder_range[0])}_{int(binder_range[-1])}" 
 
 with open(f'{final_name}.i', "w") as f:
     f.write(final)
@@ -326,13 +340,17 @@ print('##############################################')
 print(f'####FILE GENERATED WITH NAME: {final_name} ####')
 print('##############################################')
 
-gen_and_run = input('Generate sbatch script and submit? (YES) or (NO): ')
+gen_and_run = config.get('gen_and_run', 'NO')
 
-if (gen_and_run == 'YES'):
-    nodes, cores, days, hours, app = input('Provide nodes, cores, days, hours, and app name: ').split(',')
-    account = input('Provide account to submit job: ')
+if truthy(gen_and_run):
+    nodes = config.get('sbatch_nodes', 1)
+    cores = config.get('sbatch_cores', 128)
+    days = config.get('sbatch_days', 1)
+    hours = config.get('sbatch_hours', 0)
+    app = config.get('sbatch_app', 'ml')
+    account = config.get('sbatch_account', 'alta')
     #generate a new dir for every run
-    su.run(['mkdir', f'DIR{final_name}'])
+    su.run(['mkdir', f'./DIR{final_name}'])
 
     #copy all csv files to each particular folder
     import glob
@@ -363,18 +381,21 @@ if (gen_and_run == 'YES'):
     sbatch_final = sbatch_final.replace('{APP_NAME}', str(app))
     sbatch_final = sbatch_final.replace('{INPUT}', f'{final_name}')
     sbatch_final = sbatch_final.replace('{DIR}', f'DIR{final_name}')
-    sbatch_final = sbatch_final.replace('{ACC}', str(account))
+    sbatch_final = sbatch_final.replace(
+        '#SBATCH -A {ACC}',
+        f'#SBATCH -A {account}' if account else '',
+    )
     #sbatch_final = sbatch_final.replace('{FULL_OUTPUTS}', str('outputs = exodus') if full_outputs == 'YES' else str(''))
 
     #input queue
-    queue = str(input('Queue to submit the job (normal) or (standby): '))
+    queue = config.get('sbatch_queue', 'normal')
     sbatch_final = sbatch_final.replace('{QUEUE}', str(queue))
 
     with open(f'DIR{final_name}/{final_name}', 'w') as f:
         f.write(sbatch_final)
     
     #submit the job
-    su.run(['sbatch', f'DIR{final_name}/{final_name}'])
+    su.run(['sbatch', '-A', account, f'DIR{final_name}/{final_name}'])
 
 #generate log file with al the used configuration
 dump_name = f'DIR{final_name}/DUMP{final_name}.txt'
@@ -403,4 +424,4 @@ with open(dump_name, 'w') as f:
     f.write(f"Use Tabular Time?: {tabular_time}\n")
     f.write(f"Use Time Distributions?: {use_distributions}\n")
     f.write(f"Use Gating for Heat and Chemical Sources?: {use_gating}\n")
-#################################################################################
+#################################################################################   
