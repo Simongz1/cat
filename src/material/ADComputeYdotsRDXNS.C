@@ -73,10 +73,8 @@ ADComputeYdotsRDXNS::ADComputeYdotsRDXNS(const InputParameters & parameters)
     _Y1_dot(declareADProperty<Real>("Y1_dot")),
     _Y2_dot(declareADProperty<Real>("Y2_dot")),
     _Y3_dot(declareADProperty<Real>("Y3_dot")),
-
     _time_react(getADMaterialProperty<Real>("time_react"))
-{   
-}
+{}
 
 void
 ADComputeYdotsRDXNS::computeQpProperties()

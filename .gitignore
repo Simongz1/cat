@@ -1,4 +1,5 @@
 /fromBell/
+./original/
 .libs
 *.la
 *.lo
