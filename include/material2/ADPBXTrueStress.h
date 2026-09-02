@@ -11,7 +11,6 @@
 /* This class implements the Simo-Hughes style J2 plasticity */
 class ADPBXTrueStress
   : public DerivativeMaterialInterface<ComputeLagrangianStressPK1>,
-    public GuaranteeConsumer,
     public SingleVariableReturnMappingSolution
 {
 public:

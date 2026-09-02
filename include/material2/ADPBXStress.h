@@ -34,20 +34,28 @@ protected:
                                       const Real & R2, 
                                       const Real & omega);
   virtual ADReal computeAVPressure();
-  /// @}
 
-  const MaterialPropertyName _elasticity_tensor_name;
-  const ADMaterialProperty<RankFourTensor> & _elasticity_tensor;
   ADMaterialProperty<RankTwoTensor> &_F;
   const MaterialProperty<RankTwoTensor> & _F_old;
   ADMaterialProperty<RankTwoTensor> &_Fhat;
+  
+  //binder and RDX mechanical properties
+  const ADMaterialProperty<Real> &_binder_bulk;
+  const ADMaterialProperty<Real> &_binder_poisson;
+  const ADMaterialProperty<Real> &_binder_yield;
+  ADMaterialProperty<RankTwoTensor> &_sigma_binder;
+
+  const ADMaterialProperty<Real> &_RDX_bulk;
+  const ADMaterialProperty<Real> &_RDX_poisson;
+  ADMaterialProperty<RankTwoTensor> &_sigma_RDX;
+
   const std::string _ep_name;
   ADMaterialProperty<Real> & _ep;
   const MaterialProperty<Real> & _ep_old;
   ADMaterialProperty<Real> &_ep_dot;
 
-  ADMaterialProperty<RankTwoTensor> & _be;
-  const MaterialProperty<RankTwoTensor> & _be_old;
+  ADMaterialProperty<RankTwoTensor> & _be_bar;
+  const MaterialProperty<RankTwoTensor> & _be_bar_old;
   ADMaterialProperty<RankTwoTensor> & _Np;
 
   ADMaterialProperty<RankTwoTensor> &_Fp;
@@ -83,25 +91,17 @@ protected:
 
   const bool _use_mixture;
   const VariableValue &_fraction_csv;
-  const Real _binder_yield;
-  const Real _binder_bulk;
-  const Real _binder_shear;
 
   //declare properties
   ADReal _mixture_shear;
   ADReal _mixture_bulk;
 
-  ADMaterialProperty<RankTwoTensor> &_inv_Cp;
   ADMaterialProperty<RankTwoTensor> &_Cp;
-
-  const MaterialProperty<RankTwoTensor> &_inv_Cp_old;
-  const MaterialProperty<RankTwoTensor> &_Cp_old;
-
-  ADMaterialProperty<RankTwoTensor> &_Ce;
-  const MaterialProperty<RankTwoTensor> &_Ce_old;
 
   const MaterialProperty<RankTwoTensor> &_Ep_old;
   const MaterialProperty<RankTwoTensor> &_Ee_old;
+
+  //stresses 
   ADMaterialProperty<RankTwoTensor> &_S;
   ADMaterialProperty<RankTwoTensor> &_PK1;
 
@@ -111,20 +111,17 @@ protected:
   ADMaterialProperty<Real> &_Je;
   ADMaterialProperty<Real> &_Jp;
   ADMaterialProperty<Real> &_J;
-  ADMaterialProperty<Real> &_Je_dot;
   
   ADMaterialProperty<RankTwoTensor> &_E;
   ADMaterialProperty<RankTwoTensor> &_E_dot;
-  const unsigned int _ndisp;
 
   const ADMaterialProperty<RankTwoTensor> &_strain_increment;
   const ADMaterialProperty<RankTwoTensor> &_rotation_increment;
-  const Real _nu;
+
   ADMaterialProperty<Real> &_ss;
   const ADVariableValue &_Yinitial;
 
   ///equation of state parameters
-
   const Real _A_unreacted;
   const Real _B_unreacted;
   const Real _R1_unreacted;
@@ -139,10 +136,7 @@ protected:
   
   const ADVariableValue &_temperature;
   const ADMaterialProperty<Real> &_cv;
-  ADMaterialProperty<RankTwoTensor> &_pk1_binder;
-
-  std::vector<const ADVariableGradient *> _grad_disp;
-  std::vector<const VariableGradient *> _grad_disp_old;
 private:
-
+    //nothing here
+    //hi
 };

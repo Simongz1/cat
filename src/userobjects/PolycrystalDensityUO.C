@@ -105,6 +105,15 @@ PolycrystalDensityUO::initialSetup(){
   _grainID.clear();
   _grainID.reserve(_num_grains);
 
+  if (_sizes.size() < 2)
+    paramError("sizes", "At least two particle sizes are required.");
+  if (_sizes_fraction.empty() || _sizes_fraction[0] < 0.0 || _sizes_fraction[0] > 1.0)
+    paramError("sizes_fraction", "The first particle-size fraction must be between 0 and 1.");
+
+  // Center and radius generation must not depend on random-number use elsewhere
+  // in MOOSE or on the MPI partitioning.
+  MooseRandom::seed(1234);
+
   //get the function that contains the data
   const Function & loaded_function = getFunction(_loaded_microstructure_name);
 
@@ -116,10 +125,10 @@ PolycrystalDensityUO::initialSetup(){
 
     for (unsigned int attempt = 0; attempt < 1e3 && !accepted; ++attempt){
 
-    const Real x = std::tanh(MooseRandom::randNormal()) * (max_corner(0) - min_corner(0)) + min_corner(0);
-    const Real y = std::tanh(MooseRandom::randNormal()) * (max_corner(1) - min_corner(1)) + min_corner(1);
+    const Real x = min_corner(0) + MooseRandom::rand() * (max_corner(0) - min_corner(0));
+    const Real y = min_corner(1) + MooseRandom::rand() * (max_corner(1) - min_corner(1));
     const Real z = (_fe_problem.mesh().dimension() == 3)
-                     ? std::tanh(MooseRandom::randNormal()) * (max_corner(2) - min_corner(2)) + min_corner(2)
+                     ? min_corner(2) + MooseRandom::rand() * (max_corner(2) - min_corner(2))
                      : 0.0;
     candidate = Point(x, y, z);
 
@@ -134,7 +143,7 @@ PolycrystalDensityUO::initialSetup(){
     if (accepted){
       _centers.push_back(candidate);
 
-      const Real r = std::tanh(MooseRandom::randNormal());
+      const Real r = MooseRandom::rand();
       if (r < _sizes_fraction[0]){
         _radii.push_back(_sizes[0]);
       }else{
@@ -143,9 +152,18 @@ PolycrystalDensityUO::initialSetup(){
     }
     }
   }
+
+  if (_centers.empty())
+    mooseError("PolycrystalDensityUO was unable to place any particle centers.");
+
   ////////////////////////
   if (_tid == 0){
-     mooseInfo("Generated ", _num_grains, " Voronoi centers in PolycrystalDensityUO. Next step is to assign defects inside grains and nanoPBXs at the interfaces");
+     mooseInfo("Requested ",
+               _num_grains,
+               " Voronoi centers and generated ",
+               _centers.size(),
+               " in PolycrystalDensityUO. Next step is to assign defects inside grains and "
+               "nanoPBXs at the interfaces");
   }
   ///////////////////////
 
@@ -155,7 +173,7 @@ PolycrystalDensityUO::initialSetup(){
   //in case we supply number of pores
   if (_n_pores > 0){
     MooseRandom::seed(1234);
-    for (unsigned int gid = 0; gid < _num_grains; ++gid){
+    for (unsigned int gid = 0; gid < _centers.size(); ++gid){
       unsigned int count = 0;
       for (const auto & elem : _fe_problem.mesh().getMesh().active_element_ptr_range()){
         if (count >= _n_pores){
@@ -230,25 +248,21 @@ PolycrystalDensityUO::initialSetup(){
     Real second_min_dist = std::numeric_limits<Real>::max();
     unsigned int nearest = 0;
     
-    //this finds the nearest center at each element
-    //for (unsigned int i = 0; i < _centers.size(); ++i)
-    //{
-    //  const Real d = (centroid - _centers[i]).norm();
-    //  if (d < min_dist)
-    //  {
-    //    second_min_dist = min_dist;
-    //    min_dist = d;
-    //    nearest = i;
-//
-    //    //use the nearest center to assign the grainID
-    //    _grainID.push_back(i + 1); //this has an arbitrary reference at 1, 0 will be left for binder
-//
-    //    //now we need to make sure to assign grain ID only from 1 to _n_grains, 0 will be binder
-    //  }
-    //  else if (d < second_min_dist){
-    //    second_min_dist = d;
-    //  }
-    //}
+    // Find both the nearest and second-nearest centers.  The nearest center
+    // determines particle membership; their distance difference identifies the
+    // inter-particle/Voronoi boundary used for the binder thickness.
+    for (unsigned int i = 0; i < _centers.size(); ++i)
+    {
+      const Real d = (centroid - _centers[i]).norm();
+      if (d < min_dist)
+      {
+        second_min_dist = min_dist;
+        min_dist = d;
+        nearest = i;
+      }
+      else if (d < second_min_dist)
+        second_min_dist = d;
+    }
 
     //generalized definition of three cases
     bool is_pore = false;
@@ -271,7 +285,7 @@ PolycrystalDensityUO::initialSetup(){
     Real density_val;
 
     //create local variable for grainID to use to assign values later
-    Real grainID;
+    Real grainID = 0.0;
 
     //declare real assignments
     Real euler1 = 0.;
@@ -344,6 +358,7 @@ PolycrystalDensityUO::initialSetup(){
       density_val =
         is_grain ? (_range_in[0] + rand_value * (_range_in[1] - _range_in[0]))
                   : (_range_out[0] + rand_value * (_range_out[1] - _range_out[0]));
+      grainID = is_grain ? static_cast<Real>(nearest + 1) : 0.0;
     }
     
     //here the density value is assigned to the unordered map

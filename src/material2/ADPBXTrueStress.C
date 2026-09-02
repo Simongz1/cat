@@ -35,7 +35,6 @@ ADPBXTrueStress::validParams()
 ADPBXTrueStress::ADPBXTrueStress(
     const InputParameters & parameters)
   : DerivativeMaterialInterface<ComputeLagrangianStressPK1>(parameters),
-    GuaranteeConsumer(this),
     SingleVariableReturnMappingSolution(parameters),
     _elasticity_tensor_name(_base_name + getParam<MaterialPropertyName>("elasticity_tensor")),
     _elasticity_tensor(getMaterialProperty<RankFourTensor>(_elasticity_tensor_name)),
